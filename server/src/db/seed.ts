@@ -22,7 +22,7 @@ const VENUES = [
   { name: 'Leonardo Arena', city: 'Beer Sheva' },
 ];
 
-async function seed() {
+const seed = async () => {
   console.log('Seeding sports...');
   await db.insert(sports).values(SPORTS).onConflictDoNothing();
 
