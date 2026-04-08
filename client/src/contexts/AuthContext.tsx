@@ -1,6 +1,6 @@
 // client/src/contexts/AuthContext.tsx
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
-import { api, ApiRequestError } from '../lib/api';
+import { api } from '../lib/api';
 
 interface User {
   id: number;
@@ -65,4 +65,4 @@ export function useAuth(): AuthContextValue {
   return context;
 }
 
-export { type User, ApiRequestError };
+export type { User };
