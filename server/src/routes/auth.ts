@@ -51,7 +51,14 @@ authRouter.post('/register', async (req: Request, res: Response) => {
     const token = signToken({ id: newUser.id, email: newUser.email, name: newUser.name });
     res.cookie(COOKIE_NAME, token, getCookieOptions());
     res.status(201).json({ user: newUser });
-  } catch {
+  } catch (err: unknown) {
+    if (
+      typeof err === 'object' && err !== null &&
+      'code' in err && (err as { code: string }).code === '23505'
+    ) {
+      res.status(409).json({ error: 'Email is already registered' });
+      return;
+    }
     res.status(500).json({ error: 'Server error, please try again later' });
   }
 });
@@ -100,5 +107,6 @@ authRouter.post('/logout', (_req: Request, res: Response) => {
 
 // GET /api/auth/me
 authRouter.get('/me', requireAuth, (req: Request, res: Response) => {
-  res.json({ user: req.user });
+  const { id, name, email } = req.user!;
+  res.json({ user: { id, name, email } });
 });
