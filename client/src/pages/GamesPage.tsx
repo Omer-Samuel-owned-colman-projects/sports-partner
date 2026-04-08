@@ -16,17 +16,7 @@ import GroupIcon from '@mui/icons-material/Group';
 import PlaceIcon from '@mui/icons-material/Place';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import { api } from '../lib/api';
-
-interface Game {
-  id: number;
-  scheduledAt: string;
-  maxPlayers: number;
-  description: string | null;
-  isOpen: boolean;
-  sport: { id: number; name: string };
-  venue: { id: number; name: string; city: string };
-  participantCount: number;
-}
+import type { Game, GamesResponse } from '@shared/games';
 
 export function GamesPage() {
   const [games, setGames] = useState<Game[]>([]);
@@ -35,7 +25,7 @@ export function GamesPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    api<{ games: Game[] }>('/api/games')
+    api<GamesResponse>('/api/games')
       .then(({ games }) => setGames(games))
       .catch(() => setError('Failed to load games'))
       .finally(() => setIsLoading(false));
