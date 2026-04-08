@@ -20,8 +20,10 @@ sports-partner/
 │   │   ├── db/
 │   │   │   ├── schema.ts      # Drizzle schema (all tables)
 │   │   │   ├── client.ts      # DB connection
-│   │   │   ├── seed.ts        # Seed sports & venues
+│   │   │   ├── seed.ts        # Seed sports, venues, users & games
 │   │   │   └── migrations/    # Generated SQL migrations
+│   │   ├── types/             # Shared API response types (inferred from Drizzle)
+│   │   ├── routes/            # Express route handlers
 │   │   └── index.ts           # Express entry point
 │   ├── drizzle.config.ts
 │   └── .env.example
@@ -69,7 +71,7 @@ npm run db:migrate
 | `npm run db:generate` | Generate a new migration file              |
 | `npm run db:migrate`  | Run pending migrations                     |
 | `npm run db:studio`   | Open Drizzle Studio (GUI for the database) |
-| `npm run db:seed`     | Seed sports and venues                     |
+| `npm run db:seed`     | Seed sports, venues, users & sample games  |
 
 ### Docker Scripts (from the project root)
 
@@ -111,3 +113,5 @@ npm start
 | `POST` | `/api/auth/register` | Create a new user                     |
 | `POST` | `/api/auth/login`    | Login with the given credentials      |
 | `POST` | `/api/auth/logout`   | Logout by clearing the current cookie |
+| `GET`  | `/api/games`         | List all games with sport, venue & participant count |
+| `GET`  | `/api/games/:id`     | Get a single game with participant list |
