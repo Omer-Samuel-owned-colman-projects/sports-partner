@@ -1,7 +1,7 @@
 import { createTheme } from '@mui/material/styles'
 
 export const theme = createTheme({
-  direction: 'rtl',
+  direction: 'ltr',
   palette: {
     mode: 'light',
     primary: {

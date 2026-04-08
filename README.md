@@ -1,16 +1,16 @@
 # Sports Partner
 
-אפליקציה חברתית למציאת שותפים למשחקי ספורט. משתמשים יכולים לפרסם משחקים קרובים, לחפש משחקים פתוחים ולהירשם כמשתתפים.
+A social app for finding partners for sports games. Users can post upcoming games, search for open games, and sign up as participants.
 
-## טכנולוגיות
+## Tech Stack
 
-| צד | טכנולוגיות |
-|----|-------------|
-| שרת | Node.js, Express, TypeScript, Drizzle ORM, PostgreSQL |
-| לקוח | React 18, MUI (Material-UI), Vite, TypeScript |
-| תשתית | Docker (PostgreSQL), JWT |
+| Layer  | Technologies                                          |
+| ------ | ----------------------------------------------------- |
+| Server | Node.js, Express, TypeScript, Drizzle ORM, PostgreSQL |
+| Client | React 18, MUI (Material-UI), Vite, TypeScript         |
+| Infra  | Docker (PostgreSQL), JWT                              |
 
-## מבנה הפרויקט
+## Project Structure
 
 ```
 sports-partner/
@@ -29,76 +29,73 @@ sports-partner/
 └── package.json         # Shared scripts
 ```
 
-## דרישות מקדימות
+## Prerequisites
 
 - [Node.js](https://nodejs.org/) v20+
-- [Docker](https://www.docker.com/) (להרצת PostgreSQL מקומית)
+- [Docker](https://www.docker.com/) (for running PostgreSQL locally)
 
-## התקנה
+## Installation
 
 ```bash
-# 1. שכפול הפרויקט
+# 1. Clone the project
 git clone https://github.com/Omer-Samuel-owned-colman-projects/sports-partner.git
 cd sports-partner
 
-# 2. התקנת תלויות
+# 2. Install dependencies
 npm install
 cd server && npm install && cd ..
 cd client && npm install && cd ..
 
-# 3. הגדרת משתני סביבה
+# 3. Set up environment variables
 cp server/.env.example server/.env
-# ערוך את server/.env לפי הצורך
+# Edit server/.env as needed
 ```
 
-## מסד נתונים
+## Setup
 
 ```bash
-# הפעלת PostgreSQL עם Docker
+# Start PostgreSQL with Docker
 npm run db:up
 
-# דחיפת הסכמה למסד הנתונים
-cd server && npm run db:push
-
-# זריעת נתוני ברירת מחדל (ספורטים ומגרשים)
-npm run db:seed
+# Run the pending migrations on your DB
+npm run db:migrate
 ```
 
-### סקריפטים למסד הנתונים (מתוך תיקיית server/)
+### Database Scripts (from the server/ directory)
 
-| סקריפט | תיאור |
-|---------|-------|
-| `npm run db:push` | דחיפת הסכמה ישירות למסד הנתונים (מומלץ לפיתוח) |
-| `npm run db:generate` | יצירת קובץ migration חדש |
-| `npm run db:migrate` | הרצת migrations ממתינים |
-| `npm run db:studio` | פתיחת Drizzle Studio (ממשק גרפי למסד הנתונים) |
-| `npm run db:seed` | זריעת ספורטים ומגרשים |
+| Script                | Description                                |
+| --------------------- | ------------------------------------------ |
+| `npm run db:push`     | Push schema directly to the database       |
+| `npm run db:generate` | Generate a new migration file              |
+| `npm run db:migrate`  | Run pending migrations                     |
+| `npm run db:studio`   | Open Drizzle Studio (GUI for the database) |
+| `npm run db:seed`     | Seed sports and venues                     |
 
-### סקריפטי Docker (מתוך שורש הפרויקט)
+### Docker Scripts (from the project root)
 
-| סקריפט | תיאור |
-|---------|-------|
-| `npm run db:up` | הפעלת PostgreSQL ברקע |
-| `npm run db:down` | עצירת הקונטיינר (הנתונים נשמרים) |
-| `npm run db:reset` | מחיקת הנתונים והפעלה מחדש |
+| Script             | Description                            |
+| ------------------ | -------------------------------------- |
+| `npm run db:up`    | Start PostgreSQL in the background     |
+| `npm run db:down`  | Stop the container (data is preserved) |
+| `npm run db:reset` | Delete data and restart                |
 
-## הרצה
+### Development
 
 ```bash
-# פיתוח — שרת ולקוח במקביל
+# Development — server and client in parallel
 npm run dev
 ```
 
-- **לקוח**: http://localhost:5173
-- **שרת**: http://localhost:3001
+- **Client**: http://localhost:5173
+- **Server**: http://localhost:3001
 
 ```bash
-# הרצה נפרדת
+# Run separately
 npm run dev:server
 npm run dev:client
 ```
 
-## בנייה ופרודקשן
+## Build & Production
 
 ```bash
 npm run build
@@ -107,15 +104,10 @@ npm start
 
 ## API
 
-| Method | Route | תיאור |
-|--------|-------|-------|
-| `GET` | `/api/health` | בדיקת תקינות השרת |
-
-## משתני סביבה
-
-ראה `server/.env.example`:
-
-```env
-DATABASE_URL=postgresql://postgres:password@localhost:5432/sports_partner
-PORT=3001
-```
+| Method | Route                | Description                           |
+| ------ | -------------------- | ------------------------------------- |
+| `GET`  | `/api/health`        | Server health check                   |
+| `GET`  | `/api/auth/me`       | Return the current user               |
+| `POST` | `/api/auth/register` | Create a new user                     |
+| `POST` | `/api/auth/login`    | Login with the given credentials      |
+| `POST` | `/api/auth/logout`   | Logout by clearing the current cookie |
