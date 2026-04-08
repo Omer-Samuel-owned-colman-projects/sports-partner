@@ -6,7 +6,7 @@
 
 ## Overview
 
-Implement user registration and login with JWT stored in httpOnly cookies. Includes server-side auth endpoints, middleware for protecting routes, and a React frontend with auth context, forms, and routing. All UI is in Hebrew.
+Implement user registration and login with JWT stored in httpOnly cookies. Includes server-side auth endpoints, middleware for protecting routes, and a React frontend with auth context, forms, and routing. All UI and error messages are in English.
 
 ## Backend
 
@@ -28,7 +28,7 @@ Implement user registration and login with JWT stored in httpOnly cookies. Inclu
 ### Register flow
 
 1. Validate input: name, email, password required. Password min 6 chars.
-2. Check if email already exists in DB — return 409 with Hebrew error if so.
+2. Check if email already exists in DB — return 409 with error if so.
 3. Hash password with `bcryptjs` (salt rounds: 10).
 4. Insert user into `users` table.
 5. Sign JWT with user id, email, name. Expiry: 7 days.
@@ -37,7 +37,7 @@ Implement user registration and login with JWT stored in httpOnly cookies. Inclu
 ### Login flow
 
 1. Validate input: email, password required.
-2. Look up user by email — return 401 with Hebrew error if not found.
+2. Look up user by email — return 401 with error if not found.
 3. Compare password with stored hash — return 401 if mismatch.
 4. Sign JWT, set cookie, return user object.
 
@@ -97,11 +97,11 @@ server/src/
 
 ### UI Components
 
-- **`LoginForm`** — email + password fields, submit button, link to register page. Hebrew labels and error messages.
-- **`RegisterForm`** — name + email + password fields, submit button, link to login page. Hebrew labels and error messages.
+- **`LoginForm`** — email + password fields, submit button, link to register page. English labels and error messages.
+- **`RegisterForm`** — name + email + password fields, submit button, link to login page. English labels and error messages.
 - Both use MUI components: `TextField`, `Button`, `Card`, `Alert`.
 - Client-side validation: required fields, email format, password min 6 chars.
-- Server errors displayed in Hebrew via `Alert` component (e.g. "האימייל כבר קיים", "סיסמה שגויה").
+- Server errors displayed via `Alert` component (e.g. "Email is already registered", "Invalid email or password").
 
 ### `ProtectedRoute` component
 
@@ -129,16 +129,16 @@ client/src/
     api.ts             # fetch wrapper
 ```
 
-## Hebrew Error Messages
+## Error Messages
 
 | Scenario | Message |
 |----------|---------|
-| Email already registered | האימייל כבר רשום במערכת |
-| Invalid credentials | אימייל או סיסמה שגויים |
-| Missing required field | שדה חובה |
-| Invalid email format | כתובת אימייל לא תקינה |
-| Password too short | הסיסמה חייבת להכיל לפחות 6 תווים |
-| Server error | שגיאת שרת, נסה שוב מאוחר יותר |
+| Email already registered | Email is already registered |
+| Invalid credentials | Invalid email or password |
+| Missing required field | This field is required |
+| Invalid email format | Invalid email address |
+| Password too short | Password must be at least 6 characters |
+| Server error | Server error, please try again later |
 
 ## What's NOT in scope
 

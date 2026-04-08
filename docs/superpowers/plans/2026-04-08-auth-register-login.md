@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Implement user registration and login with JWT stored in httpOnly cookies, with a React frontend featuring Hebrew UI.
+**Goal:** Implement user registration and login with JWT stored in httpOnly cookies, with a React frontend in English.
 
 **Architecture:** Express auth routes (`/api/auth/*`) handle register/login/logout/me. JWT is signed on auth success and set as an httpOnly cookie. A `requireAuth` middleware reads the cookie to protect routes. React frontend uses an AuthContext that calls `/api/auth/me` on mount to restore session, with react-router-dom for page routing.
 
@@ -37,8 +37,8 @@
 | `client/src/lib/api.ts` | Fetch wrapper with credentials and JSON handling |
 | `client/src/contexts/AuthContext.tsx` | Auth state, login/register/logout methods, session restore |
 | `client/src/components/ProtectedRoute.tsx` | Redirect to `/login` if not authenticated |
-| `client/src/components/RegisterForm.tsx` | Registration form with Hebrew labels |
-| `client/src/components/LoginForm.tsx` | Login form with Hebrew labels |
+| `client/src/components/RegisterForm.tsx` | Registration form |
+| `client/src/components/LoginForm.tsx` | Login form |
 | `client/src/pages/RegisterPage.tsx` | Register page layout |
 | `client/src/pages/LoginPage.tsx` | Login page layout |
 | `client/src/pages/HomePage.tsx` | Protected home page (placeholder) |
@@ -172,7 +172,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   const token = req.cookies?.[COOKIE_NAME];
 
   if (!token) {
-    res.status(401).json({ error: 'לא מחובר' });
+    res.status(401).json({ error: 'Not authenticated' });
     return;
   }
 
@@ -181,7 +181,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     req.user = payload;
     next();
   } catch {
-    res.status(401).json({ error: 'טוקן לא תקין' });
+    res.status(401).json({ error: 'Invalid token' });
   }
 }
 ```
@@ -228,18 +228,18 @@ authRouter.post('/register', async (req: Request, res: Response) => {
     const { name, email, password } = req.body;
 
     if (!name || !email || !password) {
-      res.status(400).json({ error: 'שדה חובה' });
+      res.status(400).json({ error: 'This field is required' });
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      res.status(400).json({ error: 'כתובת אימייל לא תקינה' });
+      res.status(400).json({ error: 'Invalid email address' });
       return;
     }
 
     if (password.length < 6) {
-      res.status(400).json({ error: 'הסיסמה חייבת להכיל לפחות 6 תווים' });
+      res.status(400).json({ error: 'Password must be at least 6 characters' });
       return;
     }
 
@@ -250,7 +250,7 @@ authRouter.post('/register', async (req: Request, res: Response) => {
       .limit(1);
 
     if (existing.length > 0) {
-      res.status(409).json({ error: 'האימייל כבר רשום במערכת' });
+      res.status(409).json({ error: 'Email is already registered' });
       return;
     }
 
@@ -265,7 +265,7 @@ authRouter.post('/register', async (req: Request, res: Response) => {
     res.cookie(COOKIE_NAME, token, getCookieOptions());
     res.status(201).json({ user: newUser });
   } catch {
-    res.status(500).json({ error: 'שגיאת שרת, נסה שוב מאוחר יותר' });
+    res.status(500).json({ error: 'Server error, please try again later' });
   }
 });
 
@@ -275,7 +275,7 @@ authRouter.post('/login', async (req: Request, res: Response) => {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      res.status(400).json({ error: 'שדה חובה' });
+      res.status(400).json({ error: 'This field is required' });
       return;
     }
 
@@ -286,14 +286,14 @@ authRouter.post('/login', async (req: Request, res: Response) => {
       .limit(1);
 
     if (!user) {
-      res.status(401).json({ error: 'אימייל או סיסמה שגויים' });
+      res.status(401).json({ error: 'Invalid email or password' });
       return;
     }
 
     const valid = await bcrypt.compare(password, user.passwordHash);
 
     if (!valid) {
-      res.status(401).json({ error: 'אימייל או סיסמה שגויים' });
+      res.status(401).json({ error: 'Invalid email or password' });
       return;
     }
 
@@ -301,7 +301,7 @@ authRouter.post('/login', async (req: Request, res: Response) => {
     res.cookie(COOKIE_NAME, token, getCookieOptions());
     res.json({ user: { id: user.id, name: user.name, email: user.email } });
   } catch {
-    res.status(500).json({ error: 'שגיאת שרת, נסה שוב מאוחר יותר' });
+    res.status(500).json({ error: 'Server error, please try again later' });
   }
 });
 
@@ -443,7 +443,7 @@ export async function api<T>(url: string, options?: RequestInit): Promise<T> {
   });
 
   if (!res.ok) {
-    const body: ApiError = await res.json().catch(() => ({ error: 'שגיאת שרת, נסה שוב מאוחר יותר' }));
+    const body: ApiError = await res.json().catch(() => ({ error: 'Server error, please try again later' }));
     throw new ApiRequestError(res.status, body.error);
   }
 
@@ -615,18 +615,18 @@ export function RegisterForm() {
     setError('');
 
     if (!name || !email || !password) {
-      setError('שדה חובה');
+      setError('This field is required');
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      setError('כתובת אימייל לא תקינה');
+      setError('Invalid email address');
       return;
     }
 
     if (password.length < 6) {
-      setError('הסיסמה חייבת להכיל לפחות 6 תווים');
+      setError('Password must be at least 6 characters');
       return;
     }
 
@@ -637,7 +637,7 @@ export function RegisterForm() {
       if (err instanceof ApiRequestError) {
         setError(err.message);
       } else {
-        setError('שגיאת שרת, נסה שוב מאוחר יותר');
+        setError('Server error, please try again later');
       }
     } finally {
       setIsSubmitting(false);
@@ -649,14 +649,14 @@ export function RegisterForm() {
       <Stack spacing={2}>
         {error && <Alert severity="error">{error}</Alert>}
         <TextField
-          label="שם"
+          label="Name"
           value={name}
           onChange={(e) => setName(e.target.value)}
           required
           fullWidth
         />
         <TextField
-          label="אימייל"
+          label="Email"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -664,7 +664,7 @@ export function RegisterForm() {
           fullWidth
         />
         <TextField
-          label="סיסמה"
+          label="Password"
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -677,7 +677,7 @@ export function RegisterForm() {
           fullWidth
           disabled={isSubmitting}
         >
-          {isSubmitting ? 'נרשם...' : 'הרשמה'}
+          {isSubmitting ? 'Registering...' : 'Register'}
         </Button>
       </Stack>
     </form>
@@ -706,13 +706,13 @@ export function RegisterPage() {
       <Card>
         <CardContent sx={{ p: 4 }}>
           <Typography variant="h4" component="h1" gutterBottom textAlign="center">
-            הרשמה
+            Register
           </Typography>
           <RegisterForm />
           <Typography variant="body2" textAlign="center" sx={{ mt: 2 }}>
-            כבר יש לך חשבון?{' '}
+            Already have an account?{' '}
             <Link component={RouterLink} to="/login">
-              התחברות
+              Login
             </Link>
           </Typography>
         </CardContent>
@@ -726,7 +726,7 @@ export function RegisterPage() {
 
 ```bash
 git add client/src/components/RegisterForm.tsx client/src/pages/RegisterPage.tsx
-git commit -m "feat: add registration form and page with Hebrew UI"
+git commit -m "feat: add registration form and page "
 ```
 
 ---
@@ -757,7 +757,7 @@ export function LoginForm() {
     setError('');
 
     if (!email || !password) {
-      setError('שדה חובה');
+      setError('This field is required');
       return;
     }
 
@@ -768,7 +768,7 @@ export function LoginForm() {
       if (err instanceof ApiRequestError) {
         setError(err.message);
       } else {
-        setError('שגיאת שרת, נסה שוב מאוחר יותר');
+        setError('Server error, please try again later');
       }
     } finally {
       setIsSubmitting(false);
@@ -780,7 +780,7 @@ export function LoginForm() {
       <Stack spacing={2}>
         {error && <Alert severity="error">{error}</Alert>}
         <TextField
-          label="אימייל"
+          label="Email"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -788,7 +788,7 @@ export function LoginForm() {
           fullWidth
         />
         <TextField
-          label="סיסמה"
+          label="Password"
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -801,7 +801,7 @@ export function LoginForm() {
           fullWidth
           disabled={isSubmitting}
         >
-          {isSubmitting ? 'מתחבר...' : 'התחברות'}
+          {isSubmitting ? 'Logging in...' : 'Login'}
         </Button>
       </Stack>
     </form>
@@ -830,13 +830,13 @@ export function LoginPage() {
       <Card>
         <CardContent sx={{ p: 4 }}>
           <Typography variant="h4" component="h1" gutterBottom textAlign="center">
-            התחברות
+            Login
           </Typography>
           <LoginForm />
           <Typography variant="body2" textAlign="center" sx={{ mt: 2 }}>
-            אין לך חשבון?{' '}
+            Don't have an account?{' '}
             <Link component={RouterLink} to="/register">
-              הרשמה
+              Register
             </Link>
           </Typography>
         </CardContent>
@@ -850,7 +850,7 @@ export function LoginPage() {
 
 ```bash
 git add client/src/components/LoginForm.tsx client/src/pages/LoginPage.tsx
-git commit -m "feat: add login form and page with Hebrew UI"
+git commit -m "feat: add login form and page "
 ```
 
 ---
@@ -877,10 +877,10 @@ export function HomePage() {
           Sports Partner
         </Typography>
         <Typography variant="body1" color="text.secondary" gutterBottom>
-          שלום, {user?.name}!
+          Hello, {user?.name}!
         </Typography>
         <Button variant="outlined" onClick={logout}>
-          התנתקות
+          Logout
         </Button>
       </Box>
     </Container>
@@ -1010,8 +1010,8 @@ Refresh the page. You should still be logged in (cookie persists).
 
 - [ ] **Step 7: Test duplicate email**
 
-Try registering with the same email again. You should see the Hebrew error "האימייל כבר רשום במערכת".
+Try registering with the same email again. You should see the error "Email is already registered".
 
 - [ ] **Step 8: Test wrong password**
 
-Try logging in with a wrong password. You should see "אימייל או סיסמה שגויים".
+Try logging in with a wrong password. You should see "Invalid email or password".
