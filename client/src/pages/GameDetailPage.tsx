@@ -18,25 +18,7 @@ import GroupIcon from '@mui/icons-material/Group';
 import PlaceIcon from '@mui/icons-material/Place';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import { api } from '../lib/api';
-
-interface Participant {
-  userId: number;
-  joinedAt: string;
-}
-
-interface GameDetail {
-  id: number;
-  scheduledAt: string;
-  maxPlayers: number;
-  description: string | null;
-  isOpen: boolean;
-  createdAt: string;
-  sport: { id: number; name: string };
-  venue: { id: number; name: string; city: string };
-  creator: { id: number };
-  participantCount: number;
-  participants: Participant[];
-}
+import type { GameDetail, GameDetailResponse } from '@shared/games';
 
 export function GameDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -46,7 +28,7 @@ export function GameDetailPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    api<{ game: GameDetail }>(`/api/games/${id}`)
+    api<GameDetailResponse>(`/api/games/${id}`)
       .then(({ game }) => setGame(game))
       .catch(() => setError('Failed to load game details'))
       .finally(() => setIsLoading(false));
