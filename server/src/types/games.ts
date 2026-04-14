@@ -26,3 +26,7 @@ export interface GamesResponse {
 export interface GameDetailResponse {
   game: GameDetail;
 }
+
+export interface GameMutationResponse {
+  game: { id: number };
+}

@@ -1,4 +1,4 @@
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation, matchPath } from 'react-router-dom';
 import {
   AppBar,
   Toolbar,
@@ -8,13 +8,22 @@ import {
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
 
+type NavItem = {
+  label: string;
+  path: string;
+  end?: boolean;/*`false` = stay active on nested routes (e.g. `/games` when viewing `/games/3`). Default: exact match only. */
+};
+
+const isNavItemActive = (pathname: string, item: NavItem): boolean => !!matchPath({ path: item.path, end: item.end ?? true }, pathname);
+
 export function AppLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
+  const { pathname } = useLocation();
 
-  const navItems = [
+  const navItems: NavItem[] = [
     { label: 'Games', path: '/' },
+    { label: 'Create game', path: '/games/new' },
   ];
 
   return (
@@ -36,8 +45,8 @@ export function AppLayout() {
                 color="inherit"
                 onClick={() => navigate(item.path)}
                 sx={{
-                  borderBottom: location.pathname.startsWith(item.path) ? '2px solid white' : 'none',
                   borderRadius: 0,
+                  ...(isNavItemActive(pathname, item) && { borderBottom: '2px solid white' }),
                 }}
               >
                 {item.label}

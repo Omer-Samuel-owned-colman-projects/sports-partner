@@ -11,6 +11,7 @@ import {
   Stack,
   CircularProgress,
   Alert,
+  Button,
 } from '@mui/material';
 import GroupIcon from '@mui/icons-material/Group';
 import PlaceIcon from '@mui/icons-material/Place';
@@ -49,9 +50,14 @@ export function GamesPage() {
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
-      <Typography variant="h4" component="h1" gutterBottom>
-        Games
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
+        <Typography variant="h4" component="h1">
+          Games
+        </Typography>
+        <Button variant="contained" onClick={() => navigate('/games/new')}>
+          Create game
+        </Button>
+      </Box>
 
       {games.length === 0 ? (
         <Typography color="text.secondary">No games available yet.</Typography>
