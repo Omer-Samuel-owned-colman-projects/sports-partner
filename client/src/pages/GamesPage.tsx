@@ -140,9 +140,14 @@ export function GamesPage() {
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
-      <Typography variant="h4" component="h1" gutterBottom>
-        Games
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
+        <Typography variant="h4" component="h1">
+          Games
+        </Typography>
+        <Button variant="contained" onClick={() => navigate('/games/new')}>
+          Create game
+        </Button>
+      </Box>
 
       <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
         <FormControl size="small" sx={{ minWidth: 220 }}>
