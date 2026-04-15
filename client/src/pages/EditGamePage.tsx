@@ -14,6 +14,16 @@ import { api, ApiRequestError } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 import type { GameDetailResponse, GameMutationResponse } from '@shared/games';
 
+const formatIsoDateForDateTimeLocalInput = (isoDate: string | Date): string => {
+  const date = isoDate instanceof Date ? isoDate : new Date(isoDate);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hour = String(date.getHours()).padStart(2, '0');
+  const minute = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hour}:${minute}`;
+};
+
 export function EditGamePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -36,20 +46,10 @@ export function EditGamePage() {
           setForbidden(true);
           return;
         }
-        
-        // `datetime-local` needs local calendar/clock, not `toISOString()` (UTC).
-        const d = new Date(game.scheduledAt);
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        const hour = String(d.getHours()).padStart(2, '0');
-        const minute = String(d.getMinutes()).padStart(2, '0');
-        const scheduledAtLocal = `${year}-${month}-${day}T${hour}:${minute}`;
-
         setDefaults({
           sportId: game.sport.id,
           venueId: game.venue.id,
-          scheduledAt: scheduledAtLocal,
+          scheduledAt: formatIsoDateForDateTimeLocalInput(game.scheduledAt),
           maxPlayers: game.maxPlayers,
           description: game.description ?? '',
         });
