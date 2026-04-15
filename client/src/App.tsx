@@ -3,6 +3,8 @@ import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { GamesPage } from './pages/GamesPage';
 import { GameDetailPage } from './pages/GameDetailPage';
+import { CreateGamePage } from './pages/CreateGamePage';
+import { EditGamePage } from './pages/EditGamePage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AppLayout } from './components/AppLayout';
 
@@ -19,6 +21,8 @@ function App() {
         }
       >
         <Route path="/" element={<GamesPage />} />
+        <Route path="/games/new" element={<CreateGamePage />} />
+        <Route path="/games/:id/edit" element={<EditGamePage />} />
         <Route path="/games/:id" element={<GameDetailPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -37,4 +37,9 @@ export function getCookieOptions(): CookieOptions {
   };
 }
 
+export function getClearCookieOptions(): CookieOptions {
+  const { maxAge: _maxAge, expires: _expires, ...rest } = getCookieOptions();
+  return rest;
+}
+
 export { COOKIE_NAME };
