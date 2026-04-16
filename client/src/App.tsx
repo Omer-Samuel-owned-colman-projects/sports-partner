@@ -1,18 +1,25 @@
-import { Container, Typography, Box } from '@mui/material'
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { LoginPage } from './pages/LoginPage';
+import { RegisterPage } from './pages/RegisterPage';
+import { HomePage } from './pages/HomePage';
+import { ProtectedRoute } from './components/ProtectedRoute';
 
 function App() {
   return (
-    <Container maxWidth="md">
-      <Box sx={{ py: 4, textAlign: 'center' }}>
-        <Typography variant="h3" component="h1" gutterBottom>
-          Sports Partner
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Hello World
-        </Typography>
-      </Box>
-    </Container>
-  )
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
+            <HomePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
 }
 
-export default App
+export default App;
