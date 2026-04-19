@@ -2,32 +2,7 @@ import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import { db } from './client.js';
 import { sports, venues, users, games, participants } from './schema.js';
-
-const SPORTS = [
-  { name: 'Football' },
-  { name: 'Basketball' },
-  { name: 'Tennis' },
-  { name: 'Volleyball' },
-  { name: 'Padel' },
-  { name: 'Swimming' },
-];
-
-const VENUES = [
-  { name: 'Bloomfield Stadium', city: 'Tel Aviv' },
-  { name: 'Yarkon Park Courts', city: 'Tel Aviv' },
-  { name: 'Gordon Beach Courts', city: 'Tel Aviv' },
-  { name: 'Teddy Stadium', city: 'Jerusalem' },
-  { name: 'Ramat Gan Stadium', city: 'Ramat Gan' },
-  { name: 'HaPoel Sports Center', city: 'Haifa' },
-  { name: 'Kiryat Eliezer Stadium', city: 'Haifa' },
-  { name: 'Leonardo Arena', city: 'Beer Sheva' },
-];
-
-const SEED_USERS = [
-  { name: 'Alice Cohen', email: 'alice@example.com', password: 'password123' },
-  { name: 'Bob Levi', email: 'bob@example.com', password: 'password123' },
-  { name: 'Charlie Mizrahi', email: 'charlie@example.com', password: 'password123' },
-];
+import { SPORTS, VENUES, SEED_USERS, SEED_PASSWORD } from './seed-data.js';
 
 const seed = async () => {
   console.log('Seeding sports...');
@@ -37,7 +12,7 @@ const seed = async () => {
   const insertedVenues = await db.insert(venues).values(VENUES).onConflictDoNothing().returning();
 
   console.log('Seeding users...');
-  const passwordHash = await bcrypt.hash('password123', 10);
+  const passwordHash = await bcrypt.hash(SEED_PASSWORD, 10);
   const insertedUsers = await db
     .insert(users)
     .values(SEED_USERS.map((u) => ({ name: u.name, email: u.email, passwordHash })))
