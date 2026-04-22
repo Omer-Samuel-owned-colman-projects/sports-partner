@@ -113,5 +113,9 @@ npm start
 | `POST` | `/api/auth/register` | Create a new user                     |
 | `POST` | `/api/auth/login`    | Login with the given credentials      |
 | `POST` | `/api/auth/logout`   | Logout by clearing the current cookie |
+| `GET`  | `/api/sports`        | List all sports (for game forms)      |
+| `GET`  | `/api/venues`        | List all venues (for game forms)      |
 | `GET`  | `/api/games`         | List all games with sport, venue & participant count |
 | `GET`  | `/api/games/:id`     | Get a single game with participant list |
+| `POST` | `/api/games`         | Create a game (auth required) and auto-join creator |
+| `PUT`  | `/api/games/:id`     | Edit a game (auth + creator only)     |

@@ -18,11 +18,13 @@ import GroupIcon from '@mui/icons-material/Group';
 import PlaceIcon from '@mui/icons-material/Place';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import { api } from '../lib/api';
+import { useAuth } from '../contexts/AuthContext';
 import type { GameDetail, GameDetailResponse } from '@shared/games';
 
 export function GameDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [game, setGame] = useState<GameDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -61,15 +63,22 @@ export function GameDetailPage() {
 
       <Card variant="outlined">
         <CardContent sx={{ p: 3 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
             <Typography variant="h4" component="h1">
               {game.sport.name}
             </Typography>
-            <Chip
-              label={game.isOpen ? 'Open' : 'Full'}
-              color={game.isOpen ? 'success' : 'default'}
-              size="medium"
-            />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              {user?.id === game.creator.id && (
+                <Button variant="outlined" size="small" onClick={() => navigate(`/games/${game.id}/edit`)}>
+                  Edit
+                </Button>
+              )}
+              <Chip
+                label={game.isOpen ? 'Open' : 'Full'}
+                color={game.isOpen ? 'success' : 'default'}
+                size="medium"
+              />
+            </Box>
           </Box>
 
           {game.description && (
