@@ -1,7 +1,8 @@
 import { Router, type Request, type Response } from 'express';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { games, sports, venues, participants } from '../db/schema.js';
+import { parsePositiveIntQueryParam } from '../lib/query.js';
 import type { GamesResponse, GameDetailResponse } from '../types/games.js';
 
 export const gamesRouter = Router();
@@ -24,13 +25,31 @@ const gameSelect = {
 } as const;
 
 // GET /api/games
-gamesRouter.get('/', async (_req: Request, res: Response) => {
+gamesRouter.get('/', async (req: Request, res: Response) => {
   try {
+    const { sport, venue } = req.query;
+
+    let sportId: number | null = null;
+    let venueId: number | null = null;
+
+    try {
+      sportId = parsePositiveIntQueryParam(sport);
+      venueId = parsePositiveIntQueryParam(venue);
+    } catch (err) {
+      res.status(400).json({ error: err instanceof Error ? err.message : 'Invalid query params' });
+      return;
+    }
+
+    const whereConditions = [eq(games.isOpen, true)];
+    if (sportId) whereConditions.push(eq(games.sportId, sportId));
+    if (venueId) whereConditions.push(eq(games.venueId, venueId));
+
     const rows = await db
       .select(gameSelect)
       .from(games)
       .innerJoin(sports, eq(games.sportId, sports.id))
       .innerJoin(venues, eq(games.venueId, venues.id))
+      .where(and(...whereConditions))
       .orderBy(games.scheduledAt);
 
     res.json({ games: rows } satisfies GamesResponse);
