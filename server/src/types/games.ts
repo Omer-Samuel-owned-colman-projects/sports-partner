@@ -1,4 +1,4 @@
-import type { games, sports, venues, participants } from '../db/schema.js';
+import type { games, sports, venues, participants, gameComments } from '../db/schema.js';
 
 export type Game = Pick<
   typeof games.$inferSelect,
@@ -8,6 +8,9 @@ export type Game = Pick<
   venue: Pick<typeof venues.$inferSelect, 'id' | 'name' | 'city'>;
   creator: { id: number };
   participantCount: number;
+  likeCount: number;
+  commentCount: number;
+  currentUserLiked: boolean;
   currentUserJoined: boolean;
 };
 
@@ -20,10 +23,16 @@ export type GameDetail = Game & {
   participants: GameParticipant[];
 };
 
+export type GameComment = Pick<typeof gameComments.$inferSelect, 'id' | 'userId' | 'content' | 'createdAt'>;
+
 export interface GamesResponse {
   games: Game[];
 }
 
 export interface GameDetailResponse {
   game: GameDetail;
+}
+
+export interface GameCommentsResponse {
+  comments: GameComment[];
 }

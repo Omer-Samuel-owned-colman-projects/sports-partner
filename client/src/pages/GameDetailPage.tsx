@@ -17,6 +17,9 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import GroupIcon from '@mui/icons-material/Group';
 import PlaceIcon from '@mui/icons-material/Place';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import FavoriteIcon from '@mui/icons-material/Favorite';
+import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
+import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
 import { api } from '../lib/api';
 import type { GameDetail, GameDetailResponse } from '@shared/games';
 
@@ -50,6 +53,23 @@ export function GameDetailPage() {
       setMembershipError(err instanceof Error ? err.message : 'Failed to update game participation');
     } finally {
       setMembershipLoading(false);
+    }
+  };
+
+  const handleLikeToggle = async () => {
+    if (!game) return;
+
+    const previous = game;
+    const nextLiked = !game.currentUserLiked;
+    const nextLikeCount = Math.max(0, game.likeCount + (nextLiked ? 1 : -1));
+    setGame({ ...game, currentUserLiked: nextLiked, likeCount: nextLikeCount });
+    try {
+      await api<void>(`/api/games/${id}/like`, {
+        method: game.currentUserLiked ? 'DELETE' : 'POST',
+      });
+    } catch (err) {
+      setGame(previous);
+      setError(err instanceof Error ? err.message : 'Failed to update like');
     }
   };
 
@@ -147,6 +167,24 @@ export function GameDetailPage() {
               {membershipError}
             </Alert>
           )}
+
+          <Stack direction="row" spacing={1} sx={{ mb: 3 }}>
+            <Button
+              variant={game.currentUserLiked ? 'contained' : 'outlined'}
+              color={game.currentUserLiked ? 'error' : 'inherit'}
+              startIcon={game.currentUserLiked ? <FavoriteIcon /> : <FavoriteBorderIcon />}
+              onClick={handleLikeToggle}
+            >
+              {`${game.likeCount} Likes`}
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<ChatBubbleOutlineIcon />}
+              onClick={() => navigate(`/games/${id}/comments`)}
+            >
+              {game.commentCount} Comments
+            </Button>
+          </Stack>
 
           <Divider sx={{ mb: 2 }} />
 
