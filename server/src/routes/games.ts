@@ -27,22 +27,26 @@ const gameSelect = {
 // GET /api/games
 gamesRouter.get('/', async (req: Request, res: Response) => {
   try {
-    const { sport, venue } = req.query;
+    const { sport, venue, user } = req.query;
 
     let sportId: number | null = null;
     let venueId: number | null = null;
+    let userId: number | null = null;
 
     try {
       sportId = parsePositiveIntQueryParam(sport);
       venueId = parsePositiveIntQueryParam(venue);
+      userId = parsePositiveIntQueryParam(user);
     } catch (err) {
       res.status(400).json({ error: err instanceof Error ? err.message : 'Invalid query params' });
       return;
     }
 
-    const whereConditions = [eq(games.isOpen, true)];
+    const whereConditions = [];
+    if (!userId) whereConditions.push(eq(games.isOpen, true));
     if (sportId) whereConditions.push(eq(games.sportId, sportId));
     if (venueId) whereConditions.push(eq(games.venueId, venueId));
+    if (userId) whereConditions.push(eq(games.creatorId, userId));
 
     const rows = await db
       .select(gameSelect)

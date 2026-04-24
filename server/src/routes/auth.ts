@@ -11,7 +11,21 @@ export const authRouter = Router();
 // POST /api/auth/register
 authRouter.post('/register', async (req: Request, res: Response) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, profileImageUrl } = req.body;
+    const normalizedProfileImageUrl = typeof profileImageUrl === 'string' ? profileImageUrl.trim() : '';
+    if (normalizedProfileImageUrl) {
+      try {
+        const parsedUrl = new URL(normalizedProfileImageUrl);
+        if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+          res.status(400).json({ error: 'Profile image URL must use http or https' });
+          return;
+        }
+      } catch {
+        res.status(400).json({ error: 'Profile image URL must be a valid URL' });
+        return;
+      }
+    }
+
 
     if (!name || !email || !password) {
       res.status(400).json({ error: 'This field is required' });
@@ -44,10 +58,20 @@ authRouter.post('/register', async (req: Request, res: Response) => {
 
     const [newUser] = await db
       .insert(users)
-      .values({ name, email, passwordHash })
-      .returning({ id: users.id, name: users.name, email: users.email });
+      .values({ name, email, passwordHash, profileImageUrl: normalizedProfileImageUrl || null })
+      .returning({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        profileImageUrl: users.profileImageUrl,
+      });
 
-    const token = signToken({ id: newUser.id, email: newUser.email, name: newUser.name });
+    const token = signToken({
+      id: newUser.id,
+      email: newUser.email,
+      name: newUser.name,
+      profileImageUrl: newUser.profileImageUrl ?? null,
+    });
     res.cookie(COOKIE_NAME, token, getCookieOptions());
     res.status(201).json({ user: newUser });
   } catch (err: unknown) {
@@ -90,9 +114,21 @@ authRouter.post('/login', async (req: Request, res: Response) => {
       return;
     }
 
-    const token = signToken({ id: user.id, email: user.email, name: user.name });
+    const token = signToken({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      profileImageUrl: user.profileImageUrl ?? null,
+    });
     res.cookie(COOKIE_NAME, token, getCookieOptions());
-    res.json({ user: { id: user.id, name: user.name, email: user.email } });
+    res.json({
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        profileImageUrl: user.profileImageUrl,
+      },
+    });
   } catch {
     res.status(500).json({ error: 'Server error, please try again later' });
   }
@@ -106,6 +142,67 @@ authRouter.post('/logout', (_req: Request, res: Response) => {
 
 // GET /api/auth/me
 authRouter.get('/me', requireAuth, (req: Request, res: Response) => {
-  const { id, name, email } = req.user!;
-  res.json({ user: { id, name, email } });
+  const { id, name, email, profileImageUrl } = req.user!;
+  res.json({ user: { id, name, email, profileImageUrl: profileImageUrl ?? null } });
+});
+
+// PUT /api/auth/profile
+authRouter.put('/profile', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+    const profileImageUrlRaw =
+      typeof req.body?.profileImageUrl === 'string' ? req.body.profileImageUrl.trim() : '';
+
+    if (!name) {
+      res.status(400).json({ error: 'Name is required' });
+      return;
+    }
+    if (name.length > 100) {
+      res.status(400).json({ error: 'Name cannot exceed 100 characters' });
+      return;
+    }
+
+    if (profileImageUrlRaw) {
+      try {
+        const parsedUrl = new URL(profileImageUrlRaw);
+        if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+          res.status(400).json({ error: 'Profile image URL must use http or https' });
+          return;
+        }
+      } catch {
+        res.status(400).json({ error: 'Profile image URL must be a valid URL' });
+        return;
+      }
+    }
+
+    const [updatedUser] = await db
+      .update(users)
+      .set({
+        name,
+        profileImageUrl: profileImageUrlRaw || null,
+      })
+      .where(eq(users.id, req.user!.id))
+      .returning({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        profileImageUrl: users.profileImageUrl,
+      });
+
+    if (!updatedUser) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    const token = signToken({
+      id: updatedUser.id,
+      email: updatedUser.email,
+      name: updatedUser.name,
+      profileImageUrl: updatedUser.profileImageUrl ?? null,
+    });
+    res.cookie(COOKIE_NAME, token, getCookieOptions());
+    res.json({ user: updatedUser });
+  } catch {
+    res.status(500).json({ error: 'Server error, please try again later' });
+  }
 });
