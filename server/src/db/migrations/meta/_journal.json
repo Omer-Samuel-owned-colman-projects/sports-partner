@@ -15,6 +15,13 @@
       "when": 1777000000000,
       "tag": "0001_game_social_interactions",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1777032000000,
+      "tag": "0002_user_profile_image",
+      "breakpoints": true
     }
   ]
 }

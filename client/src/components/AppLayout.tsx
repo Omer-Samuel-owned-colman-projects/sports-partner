@@ -5,6 +5,7 @@ import {
   Typography,
   Button,
   Box,
+  Avatar,
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -24,6 +25,7 @@ export function AppLayout() {
   const navItems: NavItem[] = [
     { label: 'Games', path: '/' },
     { label: 'Create game', path: '/games/new' },
+    { label: 'My Profile', path: '/profile' },
   ];
 
   return (
@@ -56,6 +58,9 @@ export function AppLayout() {
 
           {user && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Avatar src={user.profileImageUrl ?? undefined} sx={{ width: 32, height: 32 }}>
+                {user.name.charAt(0).toUpperCase()}
+              </Avatar>
               <Typography variant="body2">{user.name}</Typography>
               <Button color="inherit" variant="outlined" size="small" onClick={logout}>
                 Logout

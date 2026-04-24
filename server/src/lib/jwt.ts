@@ -17,6 +17,7 @@ export interface JwtPayload {
   id: number;
   email: string;
   name: string;
+  profileImageUrl?: string | null;
 }
 
 export function signToken(payload: JwtPayload): string {

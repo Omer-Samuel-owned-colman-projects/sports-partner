@@ -3,6 +3,7 @@ import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { GamesPage } from './pages/GamesPage';
 import { GameDetailPage } from './pages/GameDetailPage';
+import { ProfilePage } from './pages/ProfilePage';
 import { GameCommentsPage } from './pages/GameCommentsPage';
 import { CreateGamePage } from './pages/CreateGamePage';
 import { EditGamePage } from './pages/EditGamePage';
@@ -22,6 +23,7 @@ function App() {
         }
       >
         <Route path="/" element={<GamesPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
         <Route path="/games/new" element={<CreateGamePage />} />
         <Route path="/games/:id/edit" element={<EditGamePage />} />
         <Route path="/games/:id" element={<GameDetailPage />} />

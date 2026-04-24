@@ -25,3 +25,17 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     res.status(401).json({ error: 'Invalid token' });
   }
 }
+
+export function optionalAuth(req: Request, _res: Response, next: NextFunction): void {
+  const token = req.cookies?.[COOKIE_NAME];
+  if (!token) {
+    next();
+    return;
+  }
+  try {
+    req.user = verifyToken(token);
+  } catch {
+    // Invalid token: treat as unauthenticated
+  }
+  next();
+}
