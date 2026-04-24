@@ -17,6 +17,8 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import GroupIcon from '@mui/icons-material/Group';
 import PlaceIcon from '@mui/icons-material/Place';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import WaterDropIcon from '@mui/icons-material/WaterDrop';
+import ThermostatIcon from '@mui/icons-material/Thermostat';
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
@@ -146,6 +148,20 @@ export function GameDetailPage() {
                 })}
               </Typography>
             </Box>
+            {game.weather && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <ThermostatIcon color="action" />
+                  <Typography>{game.weather.tempC}°C</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <WaterDropIcon color="action" />
+                  <Typography>
+                    {game.weather.rainMm === 0 ? 'No rain' : `${game.weather.rainMm} mm rain`}
+                  </Typography>
+                </Box>
+              </Box>
+            )}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <GroupIcon color="action" />
               <Typography>
