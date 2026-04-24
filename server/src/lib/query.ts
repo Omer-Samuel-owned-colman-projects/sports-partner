@@ -8,3 +8,12 @@ export function parsePositiveIntQueryParam(value: unknown): number | null {
 
   return num;
 }
+
+export function parseBooleanQueryParam(value: unknown): boolean | null {
+  if (value === undefined || value === null || value === '') return null;
+
+  if (value === true || value === 'true') return true;
+  if (value === false || value === 'false') return false;
+
+  throw new Error('must be a boolean');
+}

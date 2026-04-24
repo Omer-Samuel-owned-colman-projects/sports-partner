@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { and, eq, gte, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { games, sports, venues, participants } from '../db/schema.js';
-import { parsePositiveIntQueryParam } from '../lib/query.js';
+import { parseBooleanQueryParam, parsePositiveIntQueryParam } from '../lib/query.js';
 import type { GamesResponse, GameDetailResponse } from '../types/games.js';
 
 export const gamesRouter = Router();
@@ -27,20 +27,25 @@ const gameSelect = {
 // GET /api/games
 gamesRouter.get('/', async (req: Request, res: Response) => {
   try {
-    const { sport, venue } = req.query;
+    const { sport, venue, includePast } = req.query;
 
     let sportId: number | null = null;
     let venueId: number | null = null;
+    let shouldIncludePast = false;
 
     try {
       sportId = parsePositiveIntQueryParam(sport);
       venueId = parsePositiveIntQueryParam(venue);
+      shouldIncludePast = parseBooleanQueryParam(includePast) ?? false;
     } catch (err) {
       res.status(400).json({ error: err instanceof Error ? err.message : 'Invalid query params' });
       return;
     }
 
-    const whereConditions = [eq(games.isOpen, true), gte(games.scheduledAt, sql`now()`)];
+    const whereConditions = [eq(games.isOpen, true)];
+    if (!shouldIncludePast) {
+      whereConditions.push(gte(games.scheduledAt, sql`now()`));
+    }
     if (sportId) whereConditions.push(eq(games.sportId, sportId));
     if (venueId) whereConditions.push(eq(games.venueId, venueId));
 
