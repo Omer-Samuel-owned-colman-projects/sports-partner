@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "npm run dev --prefix server",
-    "dev:client": "npm run dev --prefix client",
+    "dev:client": "wait-on tcp:3001 && npm run dev --prefix client",
     "build": "npm run build --prefix server && npm run build --prefix client",
     "start": "npm run start --prefix server",
     "db:up": "docker compose up -d",
@@ -14,6 +14,7 @@
     "db:reset": "docker compose down -v && docker compose up -d"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "wait-on": "^9.0.5"
   }
 }

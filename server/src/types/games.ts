@@ -11,6 +11,7 @@ export type Game = Pick<
   likeCount: number;
   commentCount: number;
   currentUserLiked: boolean;
+  currentUserJoined: boolean;
 };
 
 export type GameParticipant = Pick<
