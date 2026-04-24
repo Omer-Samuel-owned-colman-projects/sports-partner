@@ -36,3 +36,7 @@ export interface GameDetailResponse {
 export interface GameCommentsResponse {
   comments: GameComment[];
 }
+
+export interface GameMutationResponse {
+  game: { id: number };
+}

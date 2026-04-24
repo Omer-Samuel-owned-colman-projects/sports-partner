@@ -9,20 +9,6 @@ declare global {
   }
 }
 
-export function optionalAuth(req: Request, _res: Response, next: NextFunction): void {
-  const token = req.cookies?.[COOKIE_NAME];
-
-  if (token) {
-    try {
-      req.user = verifyToken(token);
-    } catch {
-      // Invalid token — proceed as unauthenticated
-    }
-  }
-
-  next();
-}
-
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const token = req.cookies?.[COOKIE_NAME];
 
