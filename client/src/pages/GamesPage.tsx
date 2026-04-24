@@ -25,7 +25,7 @@ import FavoriteIcon from '@mui/icons-material/Favorite';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
 import uniqBy from 'lodash/uniqBy';
 import { api, ApiRequestError } from '../lib/api';
-import type { Game, GamesResponse, GameDetailResponse } from '@shared/games';
+import type { Game, GamesResponse } from '@shared/games';
 
 export function GamesPage() {
   const [games, setGames] = useState<Game[]>([]);
@@ -34,7 +34,6 @@ export function GamesPage() {
   const [error, setError] = useState('');
   const [selectedSportId, setSelectedSportId] = useState('');
   const [selectedVenueId, setSelectedVenueId] = useState('');
-  const [membershipGameId, setMembershipGameId] = useState<number | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -62,22 +61,6 @@ export function GamesPage() {
   useEffect(() => {
     fetchGames(selectedSportId, selectedVenueId);
   }, [selectedSportId, selectedVenueId]);
-
-  const handleMembershipToggle = async (e: React.MouseEvent, game: Game) => {
-    e.stopPropagation();
-    setMembershipGameId(game.id);
-    try {
-      await api<GameDetailResponse>(`/api/games/${game.id}/join`, {
-        method: game.currentUserJoined ? 'DELETE' : 'POST',
-      });
-      fetchGames(selectedSportId, selectedVenueId);
-    } catch (err) {
-      const message = err instanceof ApiRequestError ? err.message : 'Failed to update game participation';
-      setError(message);
-    } finally {
-      setMembershipGameId(null);
-    }
-  };
 
   const handleLikeToggle = async (e: React.MouseEvent, game: Game) => {
     e.stopPropagation();
@@ -255,20 +238,6 @@ export function GamesPage() {
                         sx={{ mr: 1 }}
                       >
                         {game.commentCount}
-                      </Button>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        disabled={membershipGameId === game.id || (!game.currentUserJoined && !game.isOpen)}
-                        onClick={(e) => handleMembershipToggle(e, game)}
-                      >
-                        {membershipGameId === game.id
-                          ? 'Updating...'
-                          : game.currentUserJoined
-                            ? 'Leave'
-                            : game.isOpen
-                              ? 'Join'
-                              : 'Full'}
                       </Button>
                     </Box>
                   </Stack>

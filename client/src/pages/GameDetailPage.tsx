@@ -29,8 +29,6 @@ export function GameDetailPage() {
   const [game, setGame] = useState<GameDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [membershipLoading, setMembershipLoading] = useState(false);
-  const [membershipError, setMembershipError] = useState('');
 
   useEffect(() => {
     api<GameDetailResponse>(`/api/games/${id}`)
@@ -39,23 +37,6 @@ export function GameDetailPage() {
       .finally(() => setIsLoading(false));
   }, [id]);
 
-  const handleMembershipToggle = async () => {
-    if (!game) return;
-
-    setMembershipLoading(true);
-    setMembershipError('');
-    try {
-      const { game: updatedGame } = await api<GameDetailResponse>(`/api/games/${id}/join`, {
-        method: game.currentUserJoined ? 'DELETE' : 'POST',
-      });
-      setGame(updatedGame);
-    } catch (err) {
-      setMembershipError(err instanceof Error ? err.message : 'Failed to update game participation');
-    } finally {
-      setMembershipLoading(false);
-    }
-  };
-
   const handleLikeToggle = async () => {
     if (!game) return;
 
@@ -63,14 +44,13 @@ export function GameDetailPage() {
     const nextLiked = !game.currentUserLiked;
     const nextLikeCount = Math.max(0, game.likeCount + (nextLiked ? 1 : -1));
     setGame({ ...game, currentUserLiked: nextLiked, likeCount: nextLikeCount });
-    setMembershipError('');
     try {
       await api<void>(`/api/games/${id}/like`, {
         method: game.currentUserLiked ? 'DELETE' : 'POST',
       });
     } catch (err) {
       setGame(previous);
-      setMembershipError(err instanceof Error ? err.message : 'Failed to update like');
+      setError(err instanceof Error ? err.message : 'Failed to update like');
     }
   };
   if (isLoading) {
@@ -145,23 +125,6 @@ export function GameDetailPage() {
             </Box>
           </Stack>
 
-          <Button
-            variant="contained"
-            size="large"
-            fullWidth
-            onClick={handleMembershipToggle}
-            disabled={membershipLoading || (!game.currentUserJoined && !game.isOpen)}
-            sx={{ mb: 3 }}
-          >
-            {membershipLoading
-              ? 'Updating...'
-              : game.currentUserJoined
-                ? 'Leave Game'
-                : game.isOpen
-                  ? 'Join Game'
-                  : 'Full'}
-          </Button>
-
           <Stack direction="row" spacing={1} sx={{ mb: 3 }}>
             <Button
               variant={game.currentUserLiked ? 'contained' : 'outlined'}
@@ -180,11 +143,6 @@ export function GameDetailPage() {
             </Button>
           </Stack>
 
-          {membershipError && (
-            <Alert severity="error" sx={{ mb: 3 }}>
-              {membershipError}
-            </Alert>
-          )}
           <Divider sx={{ mb: 2 }} />
 
           <Typography variant="h6" gutterBottom>
