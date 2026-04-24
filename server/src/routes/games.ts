@@ -1,8 +1,9 @@
 import { Router, type Request, type Response } from 'express';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, count, eq, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { games, sports, venues, participants } from '../db/schema.js';
 import { parsePositiveIntQueryParam } from '../lib/query.js';
+import { optionalAuth, requireAuth } from '../middleware/auth.js';
 import type { GamesResponse, GameDetailResponse } from '../types/games.js';
 
 export const gamesRouter = Router();
@@ -24,8 +25,17 @@ const gameSelect = {
   participantCount,
 } as const;
 
+function currentUserJoined(userId: number | undefined) {
+  if (!userId) return sql<boolean>`false`.as('current_user_joined');
+  return sql<boolean>`EXISTS (
+    SELECT 1 FROM participants
+    WHERE participants.game_id = games.id
+    AND participants.user_id = ${userId}
+  )`.as('current_user_joined');
+}
+
 // GET /api/games
-gamesRouter.get('/', async (req: Request, res: Response) => {
+gamesRouter.get('/', optionalAuth, async (req: Request, res: Response) => {
   try {
     const { sport, venue } = req.query;
 
@@ -45,7 +55,10 @@ gamesRouter.get('/', async (req: Request, res: Response) => {
     if (venueId) whereConditions.push(eq(games.venueId, venueId));
 
     const rows = await db
-      .select(gameSelect)
+      .select({
+        ...gameSelect,
+        currentUserJoined: currentUserJoined(req.user?.id),
+      })
       .from(games)
       .innerJoin(sports, eq(games.sportId, sports.id))
       .innerJoin(venues, eq(games.venueId, venues.id))
@@ -59,7 +72,7 @@ gamesRouter.get('/', async (req: Request, res: Response) => {
 });
 
 // GET /api/games/:id
-gamesRouter.get('/:id', async (req: Request, res: Response) => {
+gamesRouter.get('/:id', optionalAuth, async (req: Request, res: Response) => {
   try {
     const gameId = Number(req.params.id);
     if (Number.isNaN(gameId)) {
@@ -68,7 +81,10 @@ gamesRouter.get('/:id', async (req: Request, res: Response) => {
     }
 
     const [row] = await db
-      .select(gameSelect)
+      .select({
+        ...gameSelect,
+        currentUserJoined: currentUserJoined(req.user?.id),
+      })
       .from(games)
       .innerJoin(sports, eq(games.sportId, sports.id))
       .innerJoin(venues, eq(games.venueId, venues.id))
@@ -89,6 +105,80 @@ gamesRouter.get('/:id', async (req: Request, res: Response) => {
       .where(eq(participants.gameId, gameId));
 
     res.json({ game: { ...row, participants: gameParticipants } } satisfies GameDetailResponse);
+  } catch {
+    res.status(500).json({ error: 'Server error, please try again later' });
+  }
+});
+
+// POST /api/games/:id/join
+gamesRouter.post('/:id/join', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const gameId = Number(req.params.id);
+    if (Number.isNaN(gameId)) {
+      res.status(400).json({ error: 'Invalid game ID' });
+      return;
+    }
+
+    const userId = req.user!.id;
+
+    const result = await db.transaction(async (tx) => {
+      const [game] = await tx
+        .select({ maxPlayers: games.maxPlayers, isOpen: games.isOpen })
+        .from(games)
+        .where(eq(games.id, gameId))
+        .limit(1);
+
+      if (!game) return { error: 'Game not found', status: 404 as const };
+      if (!game.isOpen) return { error: 'Game is full', status: 409 as const };
+
+      const [existing] = await tx
+        .select({ gameId: participants.gameId })
+        .from(participants)
+        .where(and(eq(participants.gameId, gameId), eq(participants.userId, userId)))
+        .limit(1);
+
+      if (existing) return { error: 'Already joined', status: 409 as const };
+
+      await tx.insert(participants).values({ gameId, userId });
+
+      const [{ value: participantCount }] = await tx
+        .select({ value: count() })
+        .from(participants)
+        .where(eq(participants.gameId, gameId));
+
+      if (participantCount >= game.maxPlayers) {
+        await tx.update(games).set({ isOpen: false }).where(eq(games.id, gameId));
+      }
+
+      return null;
+    });
+
+    if (result) {
+      res.status(result.status).json({ error: result.error });
+      return;
+    }
+
+    // Return refreshed game detail
+    const [row] = await db
+      .select({
+        ...gameSelect,
+        currentUserJoined: currentUserJoined(userId),
+      })
+      .from(games)
+      .innerJoin(sports, eq(games.sportId, sports.id))
+      .innerJoin(venues, eq(games.venueId, venues.id))
+      .where(eq(games.id, gameId))
+      .limit(1);
+
+    const gameParticipants = await db
+      .select({
+        userId: participants.userId,
+        joinedAt: participants.joinedAt,
+      })
+      .from(participants)
+      .where(eq(participants.gameId, gameId));
+
+    res.json({ game: { ...row!, participants: gameParticipants } } satisfies GameDetailResponse);
   } catch {
     res.status(500).json({ error: 'Server error, please try again later' });
   }

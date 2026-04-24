@@ -26,6 +26,8 @@ export function GameDetailPage() {
   const [game, setGame] = useState<GameDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [joinLoading, setJoinLoading] = useState(false);
+  const [joinError, setJoinError] = useState('');
 
   useEffect(() => {
     api<GameDetailResponse>(`/api/games/${id}`)
@@ -33,6 +35,21 @@ export function GameDetailPage() {
       .catch(() => setError('Failed to load game details'))
       .finally(() => setIsLoading(false));
   }, [id]);
+
+  const handleJoin = async () => {
+    setJoinLoading(true);
+    setJoinError('');
+    try {
+      const { game } = await api<GameDetailResponse>(`/api/games/${id}/join`, {
+        method: 'POST',
+      });
+      setGame(game);
+    } catch (err) {
+      setJoinError(err instanceof Error ? err.message : 'Failed to join game');
+    } finally {
+      setJoinLoading(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -105,6 +122,29 @@ export function GameDetailPage() {
               </Typography>
             </Box>
           </Stack>
+
+          <Button
+            variant="contained"
+            size="large"
+            fullWidth
+            onClick={handleJoin}
+            disabled={game.currentUserJoined || !game.isOpen || joinLoading}
+            sx={{ mb: 3 }}
+          >
+            {joinLoading
+              ? 'Joining...'
+              : game.currentUserJoined
+                ? 'Joined'
+                : game.isOpen
+                  ? 'Join Game'
+                  : 'Full'}
+          </Button>
+
+          {joinError && (
+            <Alert severity="error" sx={{ mb: 3 }}>
+              {joinError}
+            </Alert>
+          )}
 
           <Divider sx={{ mb: 2 }} />
 

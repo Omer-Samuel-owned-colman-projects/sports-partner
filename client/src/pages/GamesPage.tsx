@@ -15,13 +15,14 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Button,
 } from '@mui/material';
 import GroupIcon from '@mui/icons-material/Group';
 import PlaceIcon from '@mui/icons-material/Place';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import uniqBy from 'lodash/uniqBy';
-import { api } from '../lib/api';
-import type { Game, GamesResponse } from '@shared/games';
+import { api, ApiRequestError } from '../lib/api';
+import type { Game, GamesResponse, GameDetailResponse } from '@shared/games';
 
 export function GamesPage() {
   const [games, setGames] = useState<Game[]>([]);
@@ -30,6 +31,7 @@ export function GamesPage() {
   const [error, setError] = useState('');
   const [selectedSportId, setSelectedSportId] = useState('');
   const [selectedVenueId, setSelectedVenueId] = useState('');
+  const [joiningGameId, setJoiningGameId] = useState<number | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -38,10 +40,10 @@ export function GamesPage() {
       .catch(() => setError('Failed to load games'));
   }, []);
 
-  useEffect(() => {
+  const fetchGames = (sportId: string, venueId: string) => {
     const params = new URLSearchParams();
-    if (selectedSportId) params.set('sport', selectedSportId);
-    if (selectedVenueId) params.set('venue', selectedVenueId);
+    if (sportId) params.set('sport', sportId);
+    if (venueId) params.set('venue', venueId);
 
     const query = params.toString();
     const url = query ? `/api/games?${query}` : '/api/games';
@@ -52,7 +54,27 @@ export function GamesPage() {
       .then(({ games }) => setGames(games))
       .catch(() => setError('Failed to load games'))
       .finally(() => setIsLoading(false));
+  };
+
+  useEffect(() => {
+    fetchGames(selectedSportId, selectedVenueId);
   }, [selectedSportId, selectedVenueId]);
+
+  const handleJoin = async (e: React.MouseEvent, gameId: number) => {
+    e.stopPropagation();
+    setJoiningGameId(gameId);
+    try {
+      await api<GameDetailResponse>(`/api/games/${gameId}/join`, {
+        method: 'POST',
+      });
+      fetchGames(selectedSportId, selectedVenueId);
+    } catch (err) {
+      const message = err instanceof ApiRequestError ? err.message : 'Failed to join game';
+      setError(message);
+    } finally {
+      setJoiningGameId(null);
+    }
+  };
 
   const sportOptions = uniqBy(
     allOpenGames.map((game) => game.sport),
@@ -169,6 +191,22 @@ export function GamesPage() {
                       <Typography variant="body2">
                         {game.participantCount}/{game.maxPlayers}
                       </Typography>
+                    </Box>
+                    <Box sx={{ ml: 'auto' }}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        disabled={game.currentUserJoined || !game.isOpen || joiningGameId === game.id}
+                        onClick={(e) => handleJoin(e, game.id)}
+                      >
+                        {joiningGameId === game.id
+                          ? 'Joining...'
+                          : game.currentUserJoined
+                            ? 'Joined'
+                            : game.isOpen
+                              ? 'Join'
+                              : 'Full'}
+                      </Button>
                     </Box>
                   </Stack>
                 </CardContent>
