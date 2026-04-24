@@ -56,28 +56,44 @@ function currentUserJoined(userId: number | undefined) {
 // GET /api/games
 gamesRouter.get('/', optionalAuth, async (req: Request, res: Response) => {
   try {
-    const { sport, venue, user } = req.query;
+    const { sport, venue, user, page, limit } = req.query;
 
     let sportId: number | null = null;
     let venueId: number | null = null;
     let userId: number | null = null;
+    let pageNum: number | null = null;
+    let limitNum: number | null = null;
 
     try {
       sportId = parsePositiveIntQueryParam(sport);
       venueId = parsePositiveIntQueryParam(venue);
       userId = parsePositiveIntQueryParam(user);
+      pageNum = parsePositiveIntQueryParam(page);
+      limitNum = parsePositiveIntQueryParam(limit);
     } catch (err) {
       res.status(400).json({ error: err instanceof Error ? err.message : 'Invalid query params' });
       return;
     }
+    const shouldPaginate = pageNum !== null || limitNum !== null;
+    const resolvedPage = pageNum ?? 1;
+    const resolvedLimit = Math.min(limitNum ?? 10, 50);
 
     const whereConditions = [];
     if (!userId) whereConditions.push(eq(games.isOpen, true));
     if (sportId) whereConditions.push(eq(games.sportId, sportId));
     if (venueId) whereConditions.push(eq(games.venueId, venueId));
     if (userId) whereConditions.push(eq(games.creatorId, userId));
+    const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
 
-    const rows = await db
+    let total = 0;
+    if (shouldPaginate) {
+      [{ value: total }] = await db
+        .select({ value: count() })
+        .from(games)
+        .where(whereClause);
+    }
+
+    const baseQuery = db
       .select({
         ...gameSelect,
         currentUserLiked: currentUserLiked(req.user?.id),
@@ -86,10 +102,29 @@ gamesRouter.get('/', optionalAuth, async (req: Request, res: Response) => {
       .from(games)
       .innerJoin(sports, eq(games.sportId, sports.id))
       .innerJoin(venues, eq(games.venueId, venues.id))
-      .where(and(...whereConditions))
+      .where(whereClause)
       .orderBy(games.scheduledAt);
 
-    res.json({ games: rows } satisfies GamesResponse);
+    const rows = shouldPaginate
+      ? await baseQuery.limit(resolvedLimit).offset((resolvedPage - 1) * resolvedLimit)
+      : await baseQuery;
+
+    if (!shouldPaginate) {
+      res.json({ games: rows } satisfies GamesResponse);
+      return;
+    }
+
+    const totalPages = Math.max(1, Math.ceil(total / resolvedLimit));
+    res.json({
+      games: rows,
+      pagination: {
+        page: resolvedPage,
+        limit: resolvedLimit,
+        total,
+        totalPages,
+        hasMore: resolvedPage < totalPages,
+      },
+    } satisfies GamesResponse);
   } catch {
     res.status(500).json({ error: 'Server error, please try again later' });
   }
