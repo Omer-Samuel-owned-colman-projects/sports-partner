@@ -12,6 +12,7 @@ export type Game = Pick<
   commentCount: number;
   currentUserLiked: boolean;
   currentUserJoined: boolean;
+  weather: { tempC: number; rainMm: number } | null;
 };
 
 export type GameParticipant = Pick<
