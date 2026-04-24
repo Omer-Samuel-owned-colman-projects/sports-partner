@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from 'express';
-import { and, count, desc, eq, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gt, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
 
 import { gameComments, gameLikes, games, sports, venues, participants } from '../db/schema.js';
@@ -79,7 +79,10 @@ gamesRouter.get('/', optionalAuth, async (req: Request, res: Response) => {
     const resolvedLimit = Math.min(limitNum ?? 10, 50);
 
     const whereConditions = [];
-    if (!userId) whereConditions.push(eq(games.isOpen, true));
+    if (!userId) {
+      whereConditions.push(eq(games.isOpen, true));
+      whereConditions.push(gt(games.scheduledAt, new Date()));
+    }
     if (sportId) whereConditions.push(eq(games.sportId, sportId));
     if (venueId) whereConditions.push(eq(games.venueId, venueId));
     if (userId) whereConditions.push(eq(games.creatorId, userId));
