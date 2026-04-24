@@ -8,6 +8,13 @@
       "when": 1775638901981,
       "tag": "0000_last_talkback",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1777000000000,
+      "tag": "0001_game_social_interactions",
+      "breakpoints": true
     }
   ]
 }

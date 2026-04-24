@@ -20,6 +20,9 @@ import {
 import GroupIcon from '@mui/icons-material/Group';
 import PlaceIcon from '@mui/icons-material/Place';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
+import FavoriteIcon from '@mui/icons-material/Favorite';
+import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
 import uniqBy from 'lodash/uniqBy';
 import { api, ApiRequestError } from '../lib/api';
 import type { Game, GamesResponse, GameDetailResponse } from '@shared/games';
@@ -73,6 +76,39 @@ export function GamesPage() {
       setError(message);
     } finally {
       setMembershipGameId(null);
+    }
+  };
+
+  const handleLikeToggle = async (e: React.MouseEvent, game: Game) => {
+    e.stopPropagation();
+    const nextLiked = !game.currentUserLiked;
+    const nextLikeCount = Math.max(0, game.likeCount + (nextLiked ? 1 : -1));
+
+    const patchLikeState = (targetGames: Game[]) =>
+      targetGames.map((candidate) =>
+        candidate.id === game.id
+          ? { ...candidate, currentUserLiked: nextLiked, likeCount: nextLikeCount }
+          : candidate,
+      );
+
+    setGames((prev) => patchLikeState(prev));
+    setAllOpenGames((prev) => patchLikeState(prev));
+
+    try {
+      await api<void>(`/api/games/${game.id}/like`, {
+        method: game.currentUserLiked ? 'DELETE' : 'POST',
+      });
+    } catch (err) {
+      const rollback = (targetGames: Game[]) =>
+        targetGames.map((candidate) =>
+          candidate.id === game.id
+            ? { ...candidate, currentUserLiked: game.currentUserLiked, likeCount: game.likeCount }
+            : candidate,
+        );
+      setGames((prev) => rollback(prev));
+      setAllOpenGames((prev) => rollback(prev));
+      const message = err instanceof ApiRequestError ? err.message : 'Failed to update like';
+      setError(message);
     }
   };
 
@@ -167,7 +203,7 @@ export function GamesPage() {
                     </Typography>
                   )}
 
-                  <Stack direction="row" spacing={3} sx={{ color: 'text.secondary' }}>
+                  <Stack direction="row" spacing={3} sx={{ color: 'text.secondary', flexWrap: 'wrap', rowGap: 1 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                       <PlaceIcon fontSize="small" />
                       <Typography variant="body2">
@@ -193,6 +229,28 @@ export function GamesPage() {
                       </Typography>
                     </Box>
                     <Box sx={{ ml: 'auto' }}>
+                      <Button
+                        size="small"
+                        variant={game.currentUserLiked ? 'contained' : 'outlined'}
+                        color={game.currentUserLiked ? 'error' : 'inherit'}
+                        startIcon={game.currentUserLiked ? <FavoriteIcon /> : <FavoriteBorderIcon />}
+                        onClick={(e) => handleLikeToggle(e, game)}
+                        sx={{ mr: 1 }}
+                      >
+                        {game.likeCount}
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<ChatBubbleOutlineIcon />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/games/${game.id}/comments`);
+                        }}
+                        sx={{ mr: 1 }}
+                      >
+                        {game.commentCount}
+                      </Button>
                       <Button
                         size="small"
                         variant="outlined"
