@@ -4,6 +4,7 @@ import { RegisterPage } from './pages/RegisterPage';
 import { GamesPage } from './pages/GamesPage';
 import { GameDetailPage } from './pages/GameDetailPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { GameCommentsPage } from './pages/GameCommentsPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AppLayout } from './components/AppLayout';
 
@@ -22,6 +23,7 @@ function App() {
         <Route path="/" element={<GamesPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/games/:id" element={<GameDetailPage />} />
+        <Route path="/games/:id/comments" element={<GameCommentsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

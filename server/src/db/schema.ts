@@ -62,11 +62,39 @@ export const participants = pgTable(
   (table) => [primaryKey({ columns: [table.gameId, table.userId] })],
 );
 
+export const gameLikes = pgTable(
+  'game_likes',
+  {
+    gameId: integer('game_id')
+      .notNull()
+      .references(() => games.id),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.gameId, table.userId] })],
+);
+
+export const gameComments = pgTable('game_comments', {
+  id: serial('id').primaryKey(),
+  gameId: integer('game_id')
+    .notNull()
+    .references(() => games.id),
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id),
+  content: text('content').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 // Relations
 
 export const usersRelations = relations(users, ({ many }) => ({
   games: many(games),
   participations: many(participants),
+  gameLikes: many(gameLikes),
+  gameComments: many(gameComments),
 }));
 
 export const sportsRelations = relations(sports, ({ many }) => ({
@@ -82,9 +110,21 @@ export const gamesRelations = relations(games, ({ one, many }) => ({
   sport: one(sports, { fields: [games.sportId], references: [sports.id] }),
   venue: one(venues, { fields: [games.venueId], references: [venues.id] }),
   participants: many(participants),
+  likes: many(gameLikes),
+  comments: many(gameComments),
 }));
 
 export const participantsRelations = relations(participants, ({ one }) => ({
   game: one(games, { fields: [participants.gameId], references: [games.id] }),
   user: one(users, { fields: [participants.userId], references: [users.id] }),
+}));
+
+export const gameLikesRelations = relations(gameLikes, ({ one }) => ({
+  game: one(games, { fields: [gameLikes.gameId], references: [games.id] }),
+  user: one(users, { fields: [gameLikes.userId], references: [users.id] }),
+}));
+
+export const gameCommentsRelations = relations(gameComments, ({ one }) => ({
+  game: one(games, { fields: [gameComments.gameId], references: [games.id] }),
+  user: one(users, { fields: [gameComments.userId], references: [users.id] }),
 }));
