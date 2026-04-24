@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from 'express';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, gte, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { games, sports, venues, participants } from '../db/schema.js';
 import { parsePositiveIntQueryParam } from '../lib/query.js';
@@ -40,7 +40,7 @@ gamesRouter.get('/', async (req: Request, res: Response) => {
       return;
     }
 
-    const whereConditions = [eq(games.isOpen, true)];
+    const whereConditions = [eq(games.isOpen, true), gte(games.scheduledAt, sql`now()`)];
     if (sportId) whereConditions.push(eq(games.sportId, sportId));
     if (venueId) whereConditions.push(eq(games.venueId, venueId));
 
