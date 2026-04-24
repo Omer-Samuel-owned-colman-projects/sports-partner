@@ -8,6 +8,7 @@ export type Game = Pick<
   venue: Pick<typeof venues.$inferSelect, 'id' | 'name' | 'city'>;
   creator: { id: number };
   participantCount: number;
+  currentUserJoined: boolean;
 };
 
 export type GameParticipant = Pick<
