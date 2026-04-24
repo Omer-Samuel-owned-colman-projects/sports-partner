@@ -27,6 +27,13 @@ export type GameComment = Pick<typeof gameComments.$inferSelect, 'id' | 'userId'
 
 export interface GamesResponse {
   games: Game[];
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasMore: boolean;
+  };
 }
 
 export interface GameDetailResponse {

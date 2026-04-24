@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Container,
@@ -23,45 +23,91 @@ import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
-import uniqBy from 'lodash/uniqBy';
 import { api, ApiRequestError } from '../lib/api';
 import type { Game, GamesResponse, GameDetailResponse } from '@shared/games';
+import type { SportsResponse, VenuesResponse } from '@shared/catalog';
 
 export function GamesPage() {
+  const PAGE_SIZE = 10;
   const [games, setGames] = useState<Game[]>([]);
-  const [allOpenGames, setAllOpenGames] = useState<Game[]>([]);
+  const [sportsList, setSportsList] = useState<SportsResponse['sports']>([]);
+  const [venuesList, setVenuesList] = useState<VenuesResponse['venues']>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [nextPage, setNextPage] = useState(1);
   const [error, setError] = useState('');
   const [selectedSportId, setSelectedSportId] = useState('');
   const [selectedVenueId, setSelectedVenueId] = useState('');
   const [membershipGameId, setMembershipGameId] = useState<number | null>(null);
+  const loaderRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    api<GamesResponse>('/api/games')
-      .then(({ games }) => setAllOpenGames(games))
-      .catch(() => setError('Failed to load games'));
+    let cancelled = false;
+    Promise.all([api<SportsResponse>('/api/sports'), api<VenuesResponse>('/api/venues')])
+      .then(([sportsRes, venuesRes]) => {
+        if (cancelled) return;
+        setSportsList(sportsRes.sports);
+        setVenuesList(venuesRes.venues);
+      })
+      .catch(() => {
+        if (!cancelled) setError('Failed to load sports and venues');
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const fetchGames = (sportId: string, venueId: string) => {
+  const fetchGamesPage = useCallback(async (pageNum: number, reset: boolean) => {
     const params = new URLSearchParams();
-    if (sportId) params.set('sport', sportId);
-    if (venueId) params.set('venue', venueId);
+    if (selectedSportId) params.set('sport', selectedSportId);
+    if (selectedVenueId) params.set('venue', selectedVenueId);
+    params.set('page', String(pageNum));
+    params.set('limit', String(PAGE_SIZE));
 
-    const query = params.toString();
-    const url = query ? `/api/games?${query}` : '/api/games';
+    if (reset) {
+      setIsLoading(true);
+      setError('');
+    } else {
+      setIsLoadingMore(true);
+    }
 
-    setIsLoading(true);
-    setError('');
-    api<GamesResponse>(url)
-      .then(({ games }) => setGames(games))
-      .catch(() => setError('Failed to load games'))
-      .finally(() => setIsLoading(false));
-  };
+    try {
+      const { games: batch, pagination } = await api<GamesResponse>(`/api/games?${params.toString()}`);
+      setGames((prev) => (reset ? batch : [...prev, ...batch]));
+      setHasMore(pagination?.hasMore ?? false);
+      setNextPage(pageNum + 1);
+    } catch {
+      setError('Failed to load games');
+    } finally {
+      setIsLoading(false);
+      setIsLoadingMore(false);
+    }
+  }, [selectedSportId, selectedVenueId]);
 
   useEffect(() => {
-    fetchGames(selectedSportId, selectedVenueId);
-  }, [selectedSportId, selectedVenueId]);
+    setGames([]);
+    setHasMore(true);
+    setNextPage(1);
+    void fetchGamesPage(1, true);
+  }, [selectedSportId, selectedVenueId, fetchGamesPage]);
+
+  useEffect(() => {
+    const node = loaderRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      const [entry] = entries;
+      if (entry?.isIntersecting && hasMore && !isLoading && !isLoadingMore) {
+        void fetchGamesPage(nextPage, false);
+      }
+    }, { threshold: 0.2 });
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, isLoading, isLoadingMore, nextPage, fetchGamesPage]);
 
   const handleMembershipToggle = async (e: React.MouseEvent, game: Game) => {
     e.stopPropagation();
@@ -70,7 +116,10 @@ export function GamesPage() {
       await api<GameDetailResponse>(`/api/games/${game.id}/join`, {
         method: game.currentUserJoined ? 'DELETE' : 'POST',
       });
-      fetchGames(selectedSportId, selectedVenueId);
+      setGames([]);
+      setHasMore(true);
+      setNextPage(1);
+      void fetchGamesPage(1, true);
     } catch (err) {
       const message = err instanceof ApiRequestError ? err.message : 'Failed to update game participation';
       setError(message);
@@ -92,7 +141,6 @@ export function GamesPage() {
       );
 
     setGames((prev) => patchLikeState(prev));
-    setAllOpenGames((prev) => patchLikeState(prev));
 
     try {
       await api<void>(`/api/games/${game.id}/like`, {
@@ -106,21 +154,10 @@ export function GamesPage() {
             : candidate,
         );
       setGames((prev) => rollback(prev));
-      setAllOpenGames((prev) => rollback(prev));
       const message = err instanceof ApiRequestError ? err.message : 'Failed to update like';
       setError(message);
     }
   };
-
-  const sportOptions = uniqBy(
-    allOpenGames.map((game) => game.sport),
-    'id',
-  );
-
-  const venueOptions = uniqBy(
-    allOpenGames.map((game) => game.venue),
-    'id',
-  );
 
   if (isLoading) {
     return (
@@ -159,7 +196,7 @@ export function GamesPage() {
             onChange={(event) => setSelectedSportId(event.target.value)}
           >
             <MenuItem value="">All sports</MenuItem>
-            {sportOptions.map((sport) => (
+            {sportsList.map((sport) => (
               <MenuItem key={sport.id} value={String(sport.id)}>
                 {sport.name}
               </MenuItem>
@@ -176,7 +213,7 @@ export function GamesPage() {
             onChange={(event) => setSelectedVenueId(event.target.value)}
           >
             <MenuItem value="">All venues</MenuItem>
-            {venueOptions.map((venue) => (
+            {venuesList.map((venue) => (
               <MenuItem key={venue.id} value={String(venue.id)}>
                 {venue.name}, {venue.city}
               </MenuItem>
@@ -276,6 +313,14 @@ export function GamesPage() {
               </CardActionArea>
             </Card>
           ))}
+          <Box ref={loaderRef} sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+            {isLoadingMore && <CircularProgress size={28} />}
+            {!isLoadingMore && !hasMore && (
+              <Typography color="text.secondary" variant="body2">
+                You have reached the end of the feed.
+              </Typography>
+            )}
+          </Box>
         </Stack>
       )}
     </Container>
