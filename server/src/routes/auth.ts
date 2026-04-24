@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { users } from '../db/schema.js';
-import { signToken, getCookieOptions, COOKIE_NAME } from '../lib/jwt.js';
+import { signToken, getCookieOptions, getClearCookieOptions, COOKIE_NAME } from '../lib/jwt.js';
 import { requireAuth } from '../middleware/auth.js';
 
 export const authRouter = Router();
@@ -136,7 +136,7 @@ authRouter.post('/login', async (req: Request, res: Response) => {
 
 // POST /api/auth/logout
 authRouter.post('/logout', (_req: Request, res: Response) => {
-  res.clearCookie(COOKIE_NAME, getCookieOptions());
+  res.clearCookie(COOKIE_NAME, getClearCookieOptions());
   res.json({ success: true });
 });
 
