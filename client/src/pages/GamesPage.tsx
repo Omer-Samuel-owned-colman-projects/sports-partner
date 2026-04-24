@@ -31,7 +31,7 @@ export function GamesPage() {
   const [error, setError] = useState('');
   const [selectedSportId, setSelectedSportId] = useState('');
   const [selectedVenueId, setSelectedVenueId] = useState('');
-  const [joiningGameId, setJoiningGameId] = useState<number | null>(null);
+  const [membershipGameId, setMembershipGameId] = useState<number | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -60,19 +60,19 @@ export function GamesPage() {
     fetchGames(selectedSportId, selectedVenueId);
   }, [selectedSportId, selectedVenueId]);
 
-  const handleJoin = async (e: React.MouseEvent, gameId: number) => {
+  const handleMembershipToggle = async (e: React.MouseEvent, game: Game) => {
     e.stopPropagation();
-    setJoiningGameId(gameId);
+    setMembershipGameId(game.id);
     try {
-      await api<GameDetailResponse>(`/api/games/${gameId}/join`, {
-        method: 'POST',
+      await api<GameDetailResponse>(`/api/games/${game.id}/join`, {
+        method: game.currentUserJoined ? 'DELETE' : 'POST',
       });
       fetchGames(selectedSportId, selectedVenueId);
     } catch (err) {
-      const message = err instanceof ApiRequestError ? err.message : 'Failed to join game';
+      const message = err instanceof ApiRequestError ? err.message : 'Failed to update game participation';
       setError(message);
     } finally {
-      setJoiningGameId(null);
+      setMembershipGameId(null);
     }
   };
 
@@ -196,13 +196,13 @@ export function GamesPage() {
                       <Button
                         size="small"
                         variant="outlined"
-                        disabled={game.currentUserJoined || !game.isOpen || joiningGameId === game.id}
-                        onClick={(e) => handleJoin(e, game.id)}
+                        disabled={membershipGameId === game.id || (!game.currentUserJoined && !game.isOpen)}
+                        onClick={(e) => handleMembershipToggle(e, game)}
                       >
-                        {joiningGameId === game.id
-                          ? 'Joining...'
+                        {membershipGameId === game.id
+                          ? 'Updating...'
                           : game.currentUserJoined
-                            ? 'Joined'
+                            ? 'Leave'
                             : game.isOpen
                               ? 'Join'
                               : 'Full'}

@@ -183,3 +183,77 @@ gamesRouter.post('/:id/join', requireAuth, async (req: Request, res: Response) =
     res.status(500).json({ error: 'Server error, please try again later' });
   }
 });
+
+// DELETE /api/games/:id/join
+gamesRouter.delete('/:id/join', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const gameId = Number(req.params.id);
+    if (Number.isNaN(gameId)) {
+      res.status(400).json({ error: 'Invalid game ID' });
+      return;
+    }
+
+    const userId = req.user!.id;
+
+    const result = await db.transaction(async (tx) => {
+      const [game] = await tx
+        .select({ id: games.id, maxPlayers: games.maxPlayers })
+        .from(games)
+        .where(eq(games.id, gameId))
+        .limit(1);
+
+      if (!game) return { error: 'Game not found', status: 404 as const };
+
+      const [existing] = await tx
+        .select({ gameId: participants.gameId })
+        .from(participants)
+        .where(and(eq(participants.gameId, gameId), eq(participants.userId, userId)))
+        .limit(1);
+
+      if (!existing) return { error: 'Not joined', status: 409 as const };
+
+      await tx
+        .delete(participants)
+        .where(and(eq(participants.gameId, gameId), eq(participants.userId, userId)));
+
+      const [{ value: participantCount }] = await tx
+        .select({ value: count() })
+        .from(participants)
+        .where(eq(participants.gameId, gameId));
+
+      if (participantCount < game.maxPlayers) {
+        await tx.update(games).set({ isOpen: true }).where(eq(games.id, gameId));
+      }
+
+      return null;
+    });
+
+    if (result) {
+      res.status(result.status).json({ error: result.error });
+      return;
+    }
+
+    const [row] = await db
+      .select({
+        ...gameSelect,
+        currentUserJoined: currentUserJoined(userId),
+      })
+      .from(games)
+      .innerJoin(sports, eq(games.sportId, sports.id))
+      .innerJoin(venues, eq(games.venueId, venues.id))
+      .where(eq(games.id, gameId))
+      .limit(1);
+
+    const gameParticipants = await db
+      .select({
+        userId: participants.userId,
+        joinedAt: participants.joinedAt,
+      })
+      .from(participants)
+      .where(eq(participants.gameId, gameId));
+
+    res.json({ game: { ...row!, participants: gameParticipants } } satisfies GameDetailResponse);
+  } catch {
+    res.status(500).json({ error: 'Server error, please try again later' });
+  }
+});

@@ -117,6 +117,8 @@ npm start
 | `GET`  | `/api/venues`        | List all venues (for game forms and filters) |
 | `GET`  | `/api/games`         | List open games with sport, venue & participant count (supports filters) |
 | `GET`  | `/api/games/:id`     | Get a single game with participant list |
+| `POST` | `/api/games/:id/join`| Join a game (auth required)              |
+| `DELETE` | `/api/games/:id/join` | Leave a game (auth required)           |
 | `POST` | `/api/games`         | Create a game (auth required) and auto-join creator |
 | `PUT`  | `/api/games/:id`     | Edit a game (auth + creator only)     |
 
