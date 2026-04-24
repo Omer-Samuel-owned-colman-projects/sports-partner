@@ -15,13 +15,17 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Button,
 } from '@mui/material';
 import GroupIcon from '@mui/icons-material/Group';
 import PlaceIcon from '@mui/icons-material/Place';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
+import FavoriteIcon from '@mui/icons-material/Favorite';
+import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
 import uniqBy from 'lodash/uniqBy';
-import { api } from '../lib/api';
-import type { Game, GamesResponse } from '@shared/games';
+import { api, ApiRequestError } from '../lib/api';
+import type { Game, GamesResponse, GameDetailResponse } from '@shared/games';
 
 export function GamesPage() {
   const [games, setGames] = useState<Game[]>([]);
@@ -30,6 +34,7 @@ export function GamesPage() {
   const [error, setError] = useState('');
   const [selectedSportId, setSelectedSportId] = useState('');
   const [selectedVenueId, setSelectedVenueId] = useState('');
+  const [membershipGameId, setMembershipGameId] = useState<number | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -38,10 +43,10 @@ export function GamesPage() {
       .catch(() => setError('Failed to load games'));
   }, []);
 
-  useEffect(() => {
+  const fetchGames = (sportId: string, venueId: string) => {
     const params = new URLSearchParams();
-    if (selectedSportId) params.set('sport', selectedSportId);
-    if (selectedVenueId) params.set('venue', selectedVenueId);
+    if (sportId) params.set('sport', sportId);
+    if (venueId) params.set('venue', venueId);
 
     const query = params.toString();
     const url = query ? `/api/games?${query}` : '/api/games';
@@ -52,8 +57,66 @@ export function GamesPage() {
       .then(({ games }) => setGames(games))
       .catch(() => setError('Failed to load games'))
       .finally(() => setIsLoading(false));
+  };
+
+  useEffect(() => {
+    fetchGames(selectedSportId, selectedVenueId);
   }, [selectedSportId, selectedVenueId]);
 
+  const handleMembershipToggle = async (e: React.MouseEvent, game: Game) => {
+    e.stopPropagation();
+    setMembershipGameId(game.id);
+    try {
+      await api<GameDetailResponse>(`/api/games/${game.id}/join`, {
+        method: game.currentUserJoined ? 'DELETE' : 'POST',
+      });
+      fetchGames(selectedSportId, selectedVenueId);
+    } catch (err) {
+      const message = err instanceof ApiRequestError ? err.message : 'Failed to update game participation';
+      setError(message);
+    } finally {
+      setMembershipGameId(null);
+    }
+  };
+
+  const handleLikeToggle = async (e: React.MouseEvent, game: Game) => {
+    e.stopPropagation();
+    const nextLiked = !game.currentUserLiked;
+    const nextLikeCount = Math.max(0, game.likeCount + (nextLiked ? 1 : -1));
+
+    const patchLikeState = (targetGames: Game[]) =>
+      targetGames.map((candidate) =>
+        candidate.id === game.id
+          ? { ...candidate, currentUserLiked: nextLiked, likeCount: nextLikeCount }
+          : candidate,
+      );
+
+    setGames((prev) => patchLikeState(prev));
+    setAllOpenGames((prev) => patchLikeState(prev));
+
+    try {
+      await api<void>(`/api/games/${game.id}/like`, {
+        method: game.currentUserLiked ? 'DELETE' : 'POST',
+      });
+    } catch (err) {
+      setGames((prev) =>
+        prev.map((candidate) =>
+          candidate.id === game.id
+            ? { ...candidate, currentUserLiked: game.currentUserLiked, likeCount: game.likeCount }
+            : candidate,
+        ),
+      );
+      setAllOpenGames((prev) =>
+        prev.map((candidate) =>
+          candidate.id === game.id
+            ? { ...candidate, currentUserLiked: game.currentUserLiked, likeCount: game.likeCount }
+            : candidate,
+        ),
+      );
+      const message = err instanceof ApiRequestError ? err.message : 'Failed to update like';
+      setError(message);
+    }
+  };
   const sportOptions = uniqBy(
     allOpenGames.map((game) => game.sport),
     'id',
@@ -145,7 +208,7 @@ export function GamesPage() {
                     </Typography>
                   )}
 
-                  <Stack direction="row" spacing={3} sx={{ color: 'text.secondary' }}>
+                  <Stack direction="row" spacing={3} sx={{ color: 'text.secondary', flexWrap: 'wrap', rowGap: 1 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                       <PlaceIcon fontSize="small" />
                       <Typography variant="body2">
@@ -169,6 +232,44 @@ export function GamesPage() {
                       <Typography variant="body2">
                         {game.participantCount}/{game.maxPlayers}
                       </Typography>
+                    </Box>
+                    <Box sx={{ ml: 'auto' }}>
+                      <Button
+                        size="small"
+                        variant={game.currentUserLiked ? 'contained' : 'outlined'}
+                        color={game.currentUserLiked ? 'error' : 'inherit'}
+                        startIcon={game.currentUserLiked ? <FavoriteIcon /> : <FavoriteBorderIcon />}
+                        onClick={(e) => handleLikeToggle(e, game)}
+                        sx={{ mr: 1 }}
+                      >
+                        {game.likeCount}
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<ChatBubbleOutlineIcon />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/games/${game.id}/comments`);
+                        }}
+                        sx={{ mr: 1 }}
+                      >
+                        {game.commentCount}
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        disabled={membershipGameId === game.id || (!game.currentUserJoined && !game.isOpen)}
+                        onClick={(e) => handleMembershipToggle(e, game)}
+                      >
+                        {membershipGameId === game.id
+                          ? 'Updating...'
+                          : game.currentUserJoined
+                            ? 'Leave'
+                            : game.isOpen
+                              ? 'Join'
+                              : 'Full'}
+                      </Button>
                     </Box>
                   </Stack>
                 </CardContent>
