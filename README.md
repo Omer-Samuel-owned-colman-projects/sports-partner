@@ -122,6 +122,17 @@ npm start
 | `POST` | `/api/games`         | Create a game (auth required) and auto-join creator |
 | `PUT`  | `/api/games/:id`     | Edit a game (auth + creator only)     |
 
+### Weather Forecasts on Games
+
+- `GET /api/games` and `GET /api/games/:id` include a `weather` field on each game:
+  - `weather: { tempC: number; rainMm: number }` when forecast data exists
+  - `weather: null` when forecast is unavailable or not eligible yet
+- Fetch rules:
+  - Games in the next **7 days** are eligible for weather refresh.
+  - Games in the next **2 days** are marked as final after refresh (`weather_final = true`) and are not refreshed again.
+  - Non-final forecasts are refreshed at a throttled interval (to reduce third-party API calls).
+- Editing a game's date/venue resets cached weather, so the server can fetch the correct forecast for the updated game.
+
 ### Games Feed Filters
 
 - `GET /api/games` returns only open games (`is_open = true`).
