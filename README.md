@@ -122,6 +122,7 @@ npm start
 | `DELETE` | `/api/games/:id/join` | Leave a game (auth required)           |
 | `POST` | `/api/games`         | Create a game (auth required) and auto-join creator |
 | `PUT`  | `/api/games/:id`     | Edit a game (auth + creator only)     |
+| `POST` | `/api/ai/search`     | AI game search assistant (Gemini parser + DB query + localized response) |
 
 ### Weather Forecasts on Games
 
@@ -150,3 +151,21 @@ npm start
 
 ### Profile Image Uploads
 - Max upload size is 5MB and the file must be an image MIME type.
+### AI Search Assistant
+
+- Endpoint: `POST /api/ai/search`
+- Request body:
+
+```json
+{ "query": "looking for basketball in tel aviv tomorrow evening" }
+```
+
+- Response includes:
+  - `detectedLanguage` from parser step
+  - `parsedSearch` JSON used for DB filtering
+  - `games` returned from DB
+  - `answer` natural-language assistant reply in the same language as the user query
+- Uses Gemini in 3 steps:
+  1. Parse the user query into structured filters + `detectedLanguage`
+  2. Query open future games from the DB
+  3. Generate a friendly response in the detected user language (fallback defaults to Hebrew)
