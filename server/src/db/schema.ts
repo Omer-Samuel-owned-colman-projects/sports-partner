@@ -7,6 +7,7 @@ import {
   boolean,
   timestamp,
   primaryKey,
+  real,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -46,6 +47,10 @@ export const games = pgTable('games', {
   description: text('description'),
   isOpen: boolean('is_open').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
+  weatherTempC: integer('weather_temp_c'),
+  weatherRainMm: real('weather_rain_mm'),
+  weatherFetchedAt: timestamp('weather_fetched_at'),
+  weatherFinal: boolean('weather_final').default(false).notNull(),
 });
 
 export const participants = pgTable(

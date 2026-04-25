@@ -7,6 +7,11 @@ import { parsePositiveIntQueryParam } from '../lib/query.js';
 import { optionalAuth, requireAuth } from '../middleware/auth.js';
 import type { GamesResponse, GameCommentsResponse, GameDetailResponse, GameMutationResponse } from '../types/games.js';
 import { gameMutationBodySchema, formatZodError } from '../validation/gameBody.js';
+import {
+  hydrateGameWeatherForRows,
+  shapeGameDetailRow,
+  shapeGameRow,
+} from '../lib/gameWeather.js';
 
 export const gamesRouter = Router();
 
@@ -33,6 +38,10 @@ const gameSelect = {
   participantCount,
   likeCount,
   commentCount,
+  weatherTempC: games.weatherTempC,
+  weatherRainMm: games.weatherRainMm,
+  weatherFetchedAt: games.weatherFetchedAt,
+  weatherFinal: games.weatherFinal,
 } as const;
 
 function currentUserLiked(userId: number | undefined) {
@@ -112,14 +121,17 @@ gamesRouter.get('/', optionalAuth, async (req: Request, res: Response) => {
       ? await baseQuery.limit(resolvedLimit).offset((resolvedPage - 1) * resolvedLimit)
       : await baseQuery;
 
+    await hydrateGameWeatherForRows(rows);
+    const shaped = rows.map(shapeGameRow);
+
     if (!shouldPaginate) {
-      res.json({ games: rows } satisfies GamesResponse);
+      res.json({ games: shaped } satisfies GamesResponse);
       return;
     }
 
     const totalPages = Math.max(1, Math.ceil(total / resolvedLimit));
     res.json({
-      games: rows,
+      games: shaped,
       pagination: {
         page: resolvedPage,
         limit: resolvedLimit,
@@ -207,6 +219,8 @@ gamesRouter.get('/:id', optionalAuth, async (req: Request, res: Response) => {
       return;
     }
 
+    await hydrateGameWeatherForRows([row]);
+
     const gameParticipants = await db
       .select({
         userId: participants.userId,
@@ -215,7 +229,9 @@ gamesRouter.get('/:id', optionalAuth, async (req: Request, res: Response) => {
       .from(participants)
       .where(eq(participants.gameId, gameId));
 
-    res.json({ game: { ...row, participants: gameParticipants } } satisfies GameDetailResponse);
+    res.json({
+      game: shapeGameDetailRow(row, gameParticipants),
+    } satisfies GameDetailResponse);
   } catch {
     res.status(500).json({ error: 'Server error, please try again later' });
   }
@@ -282,6 +298,8 @@ gamesRouter.post('/:id/join', requireAuth, async (req: Request, res: Response) =
       .where(eq(games.id, gameId))
       .limit(1);
 
+    await hydrateGameWeatherForRows([row!]);
+
     const gameParticipants = await db
       .select({
         userId: participants.userId,
@@ -290,7 +308,9 @@ gamesRouter.post('/:id/join', requireAuth, async (req: Request, res: Response) =
       .from(participants)
       .where(eq(participants.gameId, gameId));
 
-    res.json({ game: { ...row!, participants: gameParticipants } } satisfies GameDetailResponse);
+    res.json({
+      game: shapeGameDetailRow(row!, gameParticipants),
+    } satisfies GameDetailResponse);
   } catch {
     res.status(500).json({ error: 'Server error, please try again later' });
   }
@@ -357,6 +377,8 @@ gamesRouter.delete('/:id/join', requireAuth, async (req: Request, res: Response)
       .where(eq(games.id, gameId))
       .limit(1);
 
+    await hydrateGameWeatherForRows([row!]);
+
     const gameParticipants = await db
       .select({
         userId: participants.userId,
@@ -365,7 +387,9 @@ gamesRouter.delete('/:id/join', requireAuth, async (req: Request, res: Response)
       .from(participants)
       .where(eq(participants.gameId, gameId));
 
-    res.json({ game: { ...row!, participants: gameParticipants } } satisfies GameDetailResponse);
+    res.json({
+      game: shapeGameDetailRow(row!, gameParticipants),
+    } satisfies GameDetailResponse);
   } catch {
     res.status(500).json({ error: 'Server error, please try again later' });
   }
@@ -500,7 +524,12 @@ gamesRouter.put('/:id', requireAuth, async (req: Request, res: Response) => {
   const { sport_id, venue_id, date_time, max_players, description } = parsed.data;
 
   const [existing] = await db
-    .select({ id: games.id, creatorId: games.creatorId })
+    .select({
+      id: games.id,
+      creatorId: games.creatorId,
+      scheduledAt: games.scheduledAt,
+      venueId: games.venueId,
+    })
     .from(games)
     .where(eq(games.id, gameId))
     .limit(1);
@@ -528,14 +557,27 @@ gamesRouter.put('/:id', requireAuth, async (req: Request, res: Response) => {
   }
 
   try {
+    const nextScheduled = new Date(date_time);
+    const scheduleChanged = existing.scheduledAt.getTime() !== nextScheduled.getTime();
+    const venueChanged = existing.venueId !== venue_id;
+    const resetWeather = scheduleChanged || venueChanged;
+
     await db
       .update(games)
       .set({
         sportId: sport_id,
         venueId: venue_id,
-        scheduledAt: new Date(date_time),
+        scheduledAt: nextScheduled,
         maxPlayers: max_players,
         description: description || null,
+        ...(resetWeather
+          ? {
+              weatherTempC: null,
+              weatherRainMm: null,
+              weatherFetchedAt: null,
+              weatherFinal: false,
+            }
+          : {}),
       })
       .where(eq(games.id, gameId));
 

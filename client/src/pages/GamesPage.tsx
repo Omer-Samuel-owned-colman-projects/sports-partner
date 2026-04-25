@@ -23,6 +23,8 @@ import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
+import WaterDropIcon from '@mui/icons-material/WaterDrop';
+import ThermostatIcon from '@mui/icons-material/Thermostat';
 import { api, ApiRequestError } from '../lib/api';
 import type { Game, GamesResponse, GameDetailResponse } from '@shared/games';
 import type { SportsResponse, VenuesResponse } from '@shared/catalog';
@@ -264,6 +266,20 @@ export function GamesPage() {
                         })}
                       </Typography>
                     </Box>
+                    {game.weather && (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.35 }}>
+                          <ThermostatIcon sx={{ fontSize: 18 }} />
+                          <Typography variant="body2">{game.weather.tempC}°C</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.35 }}>
+                          <WaterDropIcon sx={{ fontSize: 18 }} />
+                          <Typography variant="body2">
+                            {game.weather.rainMm === 0 ? 'No rain' : `${game.weather.rainMm} mm rain`}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    )}
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                       <GroupIcon fontSize="small" />
                       <Typography variant="body2">
