@@ -30,7 +30,7 @@ export function ProfilePage() {
   const [error, setError] = useState('');
   const [editOpen, setEditOpen] = useState(false);
   const [name, setName] = useState(user?.name ?? '');
-  const [profileImageUrl, setProfileImageUrl] = useState(user?.profileImageUrl ?? '');
+  const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -44,7 +44,7 @@ export function ProfilePage() {
 
   useEffect(() => {
     setName(user?.name ?? '');
-    setProfileImageUrl(user?.profileImageUrl ?? '');
+    setProfileImageFile(null);
   }, [user, editOpen]);
 
   if (!user) {
@@ -59,7 +59,7 @@ export function ProfilePage() {
     event.preventDefault();
     setIsSaving(true);
     try {
-      await updateProfile(name, profileImageUrl);
+      await updateProfile(name, profileImageFile);
       setEditOpen(false);
       setError('');
     } catch (err) {
@@ -141,12 +141,20 @@ export function ProfilePage() {
               required
               inputProps={{ maxLength: 100 }}
             />
-            <TextField
-              label="Profile Image URL"
-              value={profileImageUrl}
-              onChange={(event) => setProfileImageUrl(event.target.value)}
-              placeholder="https://example.com/photo.jpg"
-            />
+            <Button variant="outlined" component="label">
+              {profileImageFile ? 'Change Profile Image' : 'Upload Profile Image'}
+              <input
+                hidden
+                accept="image/*"
+                type="file"
+                onChange={(event) => setProfileImageFile(event.target.files?.[0] ?? null)}
+              />
+            </Button>
+            {profileImageFile && (
+              <Typography variant="body2" color="text.secondary">
+                Selected: {profileImageFile.name}
+              </Typography>
+            )}
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setEditOpen(false)}>Cancel</Button>

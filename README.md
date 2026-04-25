@@ -113,6 +113,7 @@ npm start
 | `POST` | `/api/auth/register` | Create a new user                     |
 | `POST` | `/api/auth/login`    | Login with the given credentials      |
 | `POST` | `/api/auth/logout`   | Logout by clearing the current cookie |
+| `PUT`  | `/api/auth/profile`  | Update profile name and optionally upload profile image (auth required) |
 | `GET`  | `/api/sports`        | List all sports (for game forms and filters) |
 | `GET`  | `/api/venues`        | List all venues (for game forms and filters) |
 | `GET`  | `/api/games`         | List open games with sport, venue & participant count (supports filters) |
@@ -146,3 +147,6 @@ npm start
 - `date_time` must be a valid date in the future.
 - `max_players` must be an integer between `1` and `500`.
 - `sport_id` and `venue_id` must reference existing records.
+
+### Profile Image Uploads
+- Max upload size is 5MB and the file must be an image MIME type.

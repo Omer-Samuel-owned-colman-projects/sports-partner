@@ -14,7 +14,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  updateProfile: (name: string, profileImageUrl: string) => Promise<void>;
+  updateProfile: (name: string, profileImageFile?: File | null) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -51,10 +51,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
-  const updateProfile = useCallback(async (name: string, profileImageUrl: string) => {
+  const updateProfile = useCallback(async (name: string, profileImageFile?: File | null) => {
+    const body = new FormData();
+    body.append('name', name);
+    if (profileImageFile) {
+      body.append('profileImage', profileImageFile);
+    }
     const { user } = await api<{ user: User }>('/api/auth/profile', {
       method: 'PUT',
-      body: JSON.stringify({ name, profileImageUrl }),
+      body,
     });
     setUser(user);
   }, []);
