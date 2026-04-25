@@ -1,5 +1,9 @@
 import { Router, type Request, type Response } from 'express';
 import bcrypt from 'bcryptjs';
+import path from 'node:path';
+import fs from 'node:fs/promises';
+import crypto from 'node:crypto';
+import multer from 'multer';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { users } from '../db/schema.js';
@@ -7,24 +11,35 @@ import { signToken, getCookieOptions, getClearCookieOptions, COOKIE_NAME } from 
 import { requireAuth } from '../middleware/auth.js';
 
 export const authRouter = Router();
+const uploadsDir = path.join(process.cwd(), 'uploads', 'profiles');
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: async (_req, _file, cb) => {
+      try {
+        await fs.mkdir(uploadsDir, { recursive: true });
+        cb(null, uploadsDir);
+      } catch (err) {
+        cb(err as Error, uploadsDir);
+      }
+    },
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, `${Date.now()}-${crypto.randomUUID()}${ext}`);
+    },
+  }),
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+  },
+  fileFilter: (_req, file, cb) => {
+    cb(null, file.mimetype.startsWith('image/'));
+  },
+});
 
 // POST /api/auth/register
 authRouter.post('/register', async (req: Request, res: Response) => {
   try {
-    const { name, email, password, profileImageUrl } = req.body;
-    const normalizedProfileImageUrl = typeof profileImageUrl === 'string' ? profileImageUrl.trim() : '';
-    if (normalizedProfileImageUrl) {
-      try {
-        const parsedUrl = new URL(normalizedProfileImageUrl);
-        if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-          res.status(400).json({ error: 'Profile image URL must use http or https' });
-          return;
-        }
-      } catch {
-        res.status(400).json({ error: 'Profile image URL must be a valid URL' });
-        return;
-      }
-    }
+    const { name, email, password } = req.body;
 
 
     if (!name || !email || !password) {
@@ -58,7 +73,7 @@ authRouter.post('/register', async (req: Request, res: Response) => {
 
     const [newUser] = await db
       .insert(users)
-      .values({ name, email, passwordHash, profileImageUrl: normalizedProfileImageUrl || null })
+      .values({ name, email, passwordHash, profileImageUrl: null })
       .returning({
         id: users.id,
         name: users.name,
@@ -148,61 +163,74 @@ authRouter.get('/me', requireAuth, (req: Request, res: Response) => {
 
 // PUT /api/auth/profile
 authRouter.put('/profile', requireAuth, async (req: Request, res: Response) => {
-  try {
-    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
-    const profileImageUrlRaw =
-      typeof req.body?.profileImageUrl === 'string' ? req.body.profileImageUrl.trim() : '';
-
-    if (!name) {
-      res.status(400).json({ error: 'Name is required' });
+  upload.single('profileImage')(req, res, async (uploadErr) => {
+    if (uploadErr instanceof multer.MulterError && uploadErr.code === 'LIMIT_FILE_SIZE') {
+      res.status(400).json({ error: 'Profile image must be 5MB or less' });
       return;
     }
-    if (name.length > 100) {
-      res.status(400).json({ error: 'Name cannot exceed 100 characters' });
+    if (uploadErr) {
+      res.status(400).json({ error: 'Profile image must be a valid image file' });
       return;
     }
 
-    if (profileImageUrlRaw) {
-      try {
-        const parsedUrl = new URL(profileImageUrlRaw);
-        if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-          res.status(400).json({ error: 'Profile image URL must use http or https' });
-          return;
-        }
-      } catch {
-        res.status(400).json({ error: 'Profile image URL must be a valid URL' });
+    try {
+      const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+
+      if (!name) {
+        res.status(400).json({ error: 'Name is required' });
         return;
       }
-    }
+      if (name.length > 100) {
+        res.status(400).json({ error: 'Name cannot exceed 100 characters' });
+        return;
+      }
 
-    const [updatedUser] = await db
-      .update(users)
-      .set({
-        name,
-        profileImageUrl: profileImageUrlRaw || null,
-      })
-      .where(eq(users.id, req.user!.id))
-      .returning({
-        id: users.id,
-        name: users.name,
-        email: users.email,
-        profileImageUrl: users.profileImageUrl,
+      const [currentUser] = await db
+        .select({ profileImageUrl: users.profileImageUrl })
+        .from(users)
+        .where(eq(users.id, req.user!.id))
+        .limit(1);
+
+      if (!currentUser) {
+        res.status(404).json({ error: 'User not found' });
+        return;
+      }
+
+      let nextProfileImageUrl = currentUser.profileImageUrl;
+
+      if (req.file) {
+        nextProfileImageUrl = `/uploads/profiles/${req.file.filename}`;
+        if (currentUser.profileImageUrl?.startsWith('/uploads/profiles/')) {
+          const oldFile = path.basename(currentUser.profileImageUrl);
+          const oldPath = path.join(uploadsDir, oldFile);
+          void fs.unlink(oldPath).catch(() => undefined);
+        }
+      }
+
+      const [updatedUser] = await db
+        .update(users)
+        .set({
+          name,
+          profileImageUrl: nextProfileImageUrl,
+        })
+        .where(eq(users.id, req.user!.id))
+        .returning({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          profileImageUrl: users.profileImageUrl,
+        });
+
+      const token = signToken({
+        id: updatedUser.id,
+        email: updatedUser.email,
+        name: updatedUser.name,
+        profileImageUrl: updatedUser.profileImageUrl ?? null,
       });
-
-    if (!updatedUser) {
-      res.status(404).json({ error: 'User not found' });
-      return;
+      res.cookie(COOKIE_NAME, token, getCookieOptions());
+      res.json({ user: updatedUser });
+    } catch {
+      res.status(500).json({ error: 'Server error, please try again later' });
     }
-
-    const token = signToken({
-      id: updatedUser.id,
-      email: updatedUser.email,
-      name: updatedUser.name,
-      profileImageUrl: updatedUser.profileImageUrl ?? null,
-    });
-    res.cookie(COOKIE_NAME, token, getCookieOptions());
-    res.json({ user: updatedUser });
-  } catch {
-    res.status(500).json({ error: 'Server error, please try again later' });
-  }
+  });
 });

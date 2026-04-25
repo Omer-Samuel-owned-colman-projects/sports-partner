@@ -26,3 +26,6 @@ Thumbs.db
 logs/
 *.log
 npm-debug.log*
+
+# Uploaded pics
+server/uploads/

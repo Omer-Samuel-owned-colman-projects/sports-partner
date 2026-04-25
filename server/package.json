@@ -21,6 +21,7 @@
     "drizzle-orm": "^0.45.1",
     "express": "^4.21.0",
     "jsonwebtoken": "^9.0.3",
+    "multer": "^2.1.1",
     "pg": "^8.20.0",
     "zod": "^4.3.6"
   },
@@ -30,6 +31,7 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.1.0",
     "@types/node": "^22.19.15",
     "@types/pg": "^8.18.0",
     "dotenv": "^17.3.1",
