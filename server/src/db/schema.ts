@@ -8,15 +8,36 @@ import {
   timestamp,
   primaryKey,
   real,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 
-export const users = pgTable('users', {
+export const users = pgTable(
+  'users',
+  {
+    id: serial('id').primaryKey(),
+    name: varchar('name', { length: 100 }).notNull(),
+    email: varchar('email', { length: 255 }).notNull().unique(),
+    profileImageUrl: varchar('profile_image_url', { length: 512 }),
+    passwordHash: varchar('password_hash', { length: 255 }),
+    provider: varchar('provider', { length: 50 }).default('local').notNull(),
+    providerId: varchar('provider_id', { length: 255 }),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('provider_provider_id_idx')
+      .on(table.provider, table.providerId)
+      .where(sql`${table.provider} != 'local'`),
+  ],
+);
+
+export const refreshTokens = pgTable('refresh_tokens', {
   id: serial('id').primaryKey(),
-  name: varchar('name', { length: 100 }).notNull(),
-  email: varchar('email', { length: 255 }).notNull().unique(),
-  profileImageUrl: varchar('profile_image_url', { length: 512 }),
-  passwordHash: varchar('password_hash', { length: 255 }).notNull(),
+  userId: integer('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  token: varchar('token', { length: 255 }).notNull().unique(),
+  expiresAt: timestamp('expires_at').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -100,6 +121,11 @@ export const usersRelations = relations(users, ({ many }) => ({
   participations: many(participants),
   gameLikes: many(gameLikes),
   gameComments: many(gameComments),
+  refreshTokens: many(refreshTokens),
+}));
+
+export const refreshTokensRelations = relations(refreshTokens, ({ one }) => ({
+  user: one(users, { fields: [refreshTokens.userId], references: [users.id] }),
 }));
 
 export const sportsRelations = relations(sports, ({ many }) => ({

@@ -19,12 +19,30 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+async function fetchWithRefresh<T>(url: string, options?: RequestInit): Promise<T> {
+  try {
+    return await api<T>(url, options);
+  } catch (err) {
+    if (err instanceof Error && 'status' in err && (err as { status: number }).status === 401) {
+      // Try refreshing the access token
+      const refreshRes = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (refreshRes.ok) {
+        return await api<T>(url, options);
+      }
+    }
+    throw err;
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    api<{ user: User }>('/api/auth/me')
+    fetchWithRefresh<{ user: User }>('/api/auth/me')
       .then(({ user }) => setUser(user))
       .catch(() => setUser(null))
       .finally(() => setIsLoading(false));

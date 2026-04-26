@@ -4,11 +4,23 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 import multer from 'multer';
+import passport from 'passport';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { users } from '../db/schema.js';
-import { signToken, getCookieOptions, getClearCookieOptions, COOKIE_NAME } from '../lib/jwt.js';
+import {
+  signToken,
+  createRefreshToken,
+  rotateRefreshToken,
+  revokeRefreshToken,
+  getAccessCookieOptions,
+  getRefreshCookieOptions,
+  ACCESS_COOKIE_NAME,
+  REFRESH_COOKIE_NAME,
+} from '../lib/jwt.js';
 import { requireAuth } from '../middleware/auth.js';
+
+const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? 'http://localhost:5173';
 
 export const authRouter = Router();
 const uploadsDir = path.join(process.cwd(), 'uploads', 'profiles');
@@ -36,11 +48,15 @@ const upload = multer({
   },
 });
 
+function setAuthCookies(res: Response, accessToken: string, refreshToken: string) {
+  res.cookie(ACCESS_COOKIE_NAME, accessToken, getAccessCookieOptions());
+  res.cookie(REFRESH_COOKIE_NAME, refreshToken, getRefreshCookieOptions());
+}
+
 // POST /api/auth/register
 authRouter.post('/register', async (req: Request, res: Response) => {
   try {
     const { name, email, password } = req.body;
-
 
     if (!name || !email || !password) {
       res.status(400).json({ error: 'This field is required' });
@@ -81,13 +97,14 @@ authRouter.post('/register', async (req: Request, res: Response) => {
         profileImageUrl: users.profileImageUrl,
       });
 
-    const token = signToken({
+    const accessToken = signToken({
       id: newUser.id,
       email: newUser.email,
       name: newUser.name,
       profileImageUrl: newUser.profileImageUrl ?? null,
     });
-    res.cookie(COOKIE_NAME, token, getCookieOptions());
+    const refreshToken = await createRefreshToken(newUser.id);
+    setAuthCookies(res, accessToken, refreshToken);
     res.status(201).json({ user: newUser });
   } catch (err: unknown) {
     if (
@@ -117,7 +134,7 @@ authRouter.post('/login', async (req: Request, res: Response) => {
       .where(eq(users.email, email))
       .limit(1);
 
-    if (!user) {
+    if (!user || !user.passwordHash) {
       res.status(401).json({ error: 'Invalid email or password' });
       return;
     }
@@ -129,13 +146,14 @@ authRouter.post('/login', async (req: Request, res: Response) => {
       return;
     }
 
-    const token = signToken({
+    const accessToken = signToken({
       id: user.id,
       email: user.email,
       name: user.name,
       profileImageUrl: user.profileImageUrl ?? null,
     });
-    res.cookie(COOKIE_NAME, token, getCookieOptions());
+    const refreshToken = await createRefreshToken(user.id);
+    setAuthCookies(res, accessToken, refreshToken);
     res.json({
       user: {
         id: user.id,
@@ -149,11 +167,80 @@ authRouter.post('/login', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/auth/refresh
+authRouter.post('/refresh', async (req: Request, res: Response) => {
+  try {
+    const oldToken = req.cookies?.[REFRESH_COOKIE_NAME];
+    if (!oldToken) {
+      res.status(401).json({ error: 'No refresh token' });
+      return;
+    }
+
+    const result = await rotateRefreshToken(oldToken);
+    if (!result) {
+      res.clearCookie(REFRESH_COOKIE_NAME, getRefreshCookieOptions());
+      res.status(401).json({ error: 'Invalid refresh token' });
+      return;
+    }
+
+    setAuthCookies(res, result.accessToken, result.refreshToken);
+    res.json({
+      user: {
+        id: result.user.id,
+        name: result.user.name,
+        email: result.user.email,
+        profileImageUrl: result.user.profileImageUrl ?? null,
+      },
+    });
+  } catch {
+    res.status(500).json({ error: 'Server error, please try again later' });
+  }
+});
+
 // POST /api/auth/logout
-authRouter.post('/logout', (_req: Request, res: Response) => {
-  res.clearCookie(COOKIE_NAME, getClearCookieOptions());
+authRouter.post('/logout', async (req: Request, res: Response) => {
+  const refreshToken = req.cookies?.[REFRESH_COOKIE_NAME];
+  if (refreshToken) {
+    await revokeRefreshToken(refreshToken).catch(() => {});
+  }
+  res.clearCookie(ACCESS_COOKIE_NAME, getAccessCookieOptions());
+  res.clearCookie(REFRESH_COOKIE_NAME, getRefreshCookieOptions());
   res.json({ success: true });
 });
+
+// GET /api/auth/google
+authRouter.get(
+  '/google',
+  passport.authenticate('google', { session: false, scope: ['profile', 'email'] }),
+);
+
+// GET /api/auth/google/callback
+authRouter.get(
+  '/google/callback',
+  passport.authenticate('google', {
+    session: false,
+    failureRedirect: `${CLIENT_ORIGIN}/login?error=oauth_failed`,
+  }),
+  async (req: Request, res: Response) => {
+    try {
+      const user = req.user! as { id: number; email: string; name: string; profileImageUrl: string | null | undefined };
+
+      const accessToken = signToken({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        profileImageUrl: user.profileImageUrl ?? null,
+      });
+      const refreshToken = await createRefreshToken(user.id);
+
+      res.cookie(ACCESS_COOKIE_NAME, accessToken, getAccessCookieOptions());
+      res.cookie(REFRESH_COOKIE_NAME, refreshToken, getRefreshCookieOptions());
+      res.redirect(CLIENT_ORIGIN);
+    } catch {
+      res.redirect(`${CLIENT_ORIGIN}/login?error=oauth_failed`);
+    }
+  },
+);
 
 // GET /api/auth/me
 authRouter.get('/me', requireAuth, (req: Request, res: Response) => {
@@ -221,13 +308,13 @@ authRouter.put('/profile', requireAuth, async (req: Request, res: Response) => {
           profileImageUrl: users.profileImageUrl,
         });
 
-      const token = signToken({
+      const accessToken = signToken({
         id: updatedUser.id,
         email: updatedUser.email,
         name: updatedUser.name,
         profileImageUrl: updatedUser.profileImageUrl ?? null,
       });
-      res.cookie(COOKIE_NAME, token, getCookieOptions());
+      res.cookie(ACCESS_COOKIE_NAME, accessToken, getAccessCookieOptions());
       res.json({ user: updatedUser });
     } catch {
       res.status(500).json({ error: 'Server error, please try again later' });

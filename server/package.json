@@ -23,6 +23,8 @@
     "express": "^4.21.0",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.1.1",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
     "pg": "^8.20.0",
     "zod": "^4.3.6"
   },
@@ -34,6 +36,8 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^2.1.0",
     "@types/node": "^22.19.15",
+    "@types/passport": "^1.0.17",
+    "@types/passport-google-oauth20": "^2.0.17",
     "@types/pg": "^8.18.0",
     "dotenv": "^17.3.1",
     "drizzle-kit": "^0.31.9",

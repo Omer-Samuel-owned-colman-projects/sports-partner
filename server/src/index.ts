@@ -3,11 +3,13 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import path from 'node:path';
+import passport from 'passport';
 import { authRouter } from './routes/auth.js';
 import { gamesRouter } from './routes/games.js';
 import { sportsRouter } from './routes/sports.js';
 import { venuesRouter } from './routes/venues.js';
 import { aiRouter } from './routes/ai.js';
+import { configurePassport } from './lib/passport.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -19,6 +21,9 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+app.use(passport.initialize());
+
+configurePassport();
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

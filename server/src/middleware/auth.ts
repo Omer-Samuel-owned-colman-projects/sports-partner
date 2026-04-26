@@ -1,16 +1,14 @@
 import type { Request, Response, NextFunction } from 'express';
-import { verifyToken, COOKIE_NAME, type JwtPayload } from '../lib/jwt.js';
+import { verifyToken, ACCESS_COOKIE_NAME, type JwtPayload } from '../lib/jwt.js';
 
 declare global {
   namespace Express {
-    interface Request {
-      user?: JwtPayload;
-    }
+    interface User extends JwtPayload {}
   }
 }
 
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
-  const token = req.cookies?.[COOKIE_NAME];
+  const token = req.cookies?.[ACCESS_COOKIE_NAME];
 
   if (!token) {
     res.status(401).json({ error: 'Not authenticated' });
@@ -27,7 +25,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
 }
 
 export function optionalAuth(req: Request, _res: Response, next: NextFunction): void {
-  const token = req.cookies?.[COOKIE_NAME];
+  const token = req.cookies?.[ACCESS_COOKIE_NAME];
   if (!token) {
     next();
     return;
