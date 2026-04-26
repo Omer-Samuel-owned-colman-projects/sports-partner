@@ -24,6 +24,7 @@ export function AppLayout() {
 
   const navItems: NavItem[] = [
     { label: 'Games', path: '/' },
+    { label: 'Assistant', path: '/assistant' },
     { label: 'Create game', path: '/games/new' },
     { label: 'My Profile', path: '/profile' },
   ];

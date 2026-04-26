@@ -8,6 +8,7 @@ import { authRouter } from './routes/auth.js';
 import { gamesRouter } from './routes/games.js';
 import { sportsRouter } from './routes/sports.js';
 import { venuesRouter } from './routes/venues.js';
+import { aiRouter } from './routes/ai.js';
 import { configurePassport } from './lib/passport.js';
 
 const app = express();
@@ -32,6 +33,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/sports', sportsRouter);
 app.use('/api/venues', venuesRouter);
 app.use('/api/games', gamesRouter);
+app.use('/api/ai', aiRouter);
 
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
