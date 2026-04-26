@@ -12,8 +12,8 @@ import { api, ApiRequestError } from '../lib/api';
 import type { SportsResponse, VenuesResponse } from '@shared/catalog';
 
 export interface GameFormValues {
-  sportId: number;
-  venueId: number;
+  sportId: string;
+  venueId: string;
   scheduledAt: string;
   maxPlayers: number;
   description: string;
@@ -21,8 +21,8 @@ export interface GameFormValues {
 
 function initialFieldState(defaultValues?: Partial<GameFormValues>) {
   return {
-    sportId: defaultValues?.sportId ?? 0,
-    venueId: defaultValues?.venueId ?? 0,
+    sportId: defaultValues?.sportId ?? '',
+    venueId: defaultValues?.venueId ?? '',
     scheduledAt: defaultValues?.scheduledAt ?? '',
     maxPlayers:
       defaultValues?.maxPlayers != null ? String(defaultValues.maxPlayers) : '10',
@@ -84,11 +84,11 @@ export function GameForm({ defaultValues, submitLabel, onSubmit }: GameFormProps
     e.preventDefault();
     setError('');
 
-    if (sportId <= 0) {
+    if (!sportId) {
       setError('Select a sport');
       return;
     }
-    if (venueId <= 0) {
+    if (!venueId) {
       setError('Select a venue');
       return;
     }
@@ -147,11 +147,8 @@ export function GameForm({ defaultValues, submitLabel, onSubmit }: GameFormProps
         <TextField
           select
           label="Sport"
-          value={sportId === 0 ? '' : sportId}
-          onChange={(e) => {
-            const v = e.target.value;
-            setSportId(v === '' ? 0 : Number(v));
-          }}
+          value={sportId}
+          onChange={(e) => setSportId(e.target.value)}
           required
           fullWidth
           disabled={optionsUnavailable}
@@ -169,11 +166,8 @@ export function GameForm({ defaultValues, submitLabel, onSubmit }: GameFormProps
         <TextField
           select
           label="Venue"
-          value={venueId === 0 ? '' : venueId}
-          onChange={(e) => {
-            const v = e.target.value;
-            setVenueId(v === '' ? 0 : Number(v));
-          }}
+          value={venueId}
+          onChange={(e) => setVenueId(e.target.value)}
           required
           fullWidth
           disabled={optionsUnavailable}

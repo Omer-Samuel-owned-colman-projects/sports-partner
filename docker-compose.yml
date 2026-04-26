@@ -1,15 +1,15 @@
 services:
   db:
-    image: postgres:16-alpine
+    image: mongo:7
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: sports_partner
+      MONGO_INITDB_ROOT_USERNAME: mongo
+      MONGO_INITDB_ROOT_PASSWORD: password
+      MONGO_INITDB_DATABASE: sports_partner
     ports:
-      - "5432:5432"
+      - "27017:27017"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mongo_data:/data/db
 
 volumes:
-  postgres_data:
+  mongo_data:

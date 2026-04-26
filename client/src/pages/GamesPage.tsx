@@ -41,7 +41,7 @@ export function GamesPage() {
   const [error, setError] = useState('');
   const [selectedSportId, setSelectedSportId] = useState('');
   const [selectedVenueId, setSelectedVenueId] = useState('');
-  const [membershipGameId, setMembershipGameId] = useState<number | null>(null);
+  const [membershipGameId, setMembershipGameId] = useState<string | null>(null);
   const loaderRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
 

@@ -5,9 +5,7 @@ import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 import multer from 'multer';
 import passport from 'passport';
-import { eq } from 'drizzle-orm';
-import { db } from '../db/client.js';
-import { users } from '../db/schema.js';
+import { User } from '../db/schema.js';
 import {
   signToken,
   createRefreshToken,
@@ -74,42 +72,36 @@ authRouter.post('/register', async (req: Request, res: Response) => {
       return;
     }
 
-    const existing = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.email, email))
-      .limit(1);
-
-    if (existing.length > 0) {
+    const existing = await User.findOne({ email });
+    if (existing) {
       res.status(409).json({ error: 'Email is already registered' });
       return;
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const [newUser] = await db
-      .insert(users)
-      .values({ name, email, passwordHash, profileImageUrl: null })
-      .returning({
-        id: users.id,
-        name: users.name,
-        email: users.email,
-        profileImageUrl: users.profileImageUrl,
-      });
+    const newUser = await User.create({ name, email, passwordHash, profileImageUrl: null });
 
     const accessToken = signToken({
-      id: newUser.id,
+      id: newUser._id.toString(),
       email: newUser.email,
       name: newUser.name,
       profileImageUrl: newUser.profileImageUrl ?? null,
     });
-    const refreshToken = await createRefreshToken(newUser.id);
+    const refreshToken = await createRefreshToken(newUser._id.toString());
     setAuthCookies(res, accessToken, refreshToken);
-    res.status(201).json({ user: newUser });
+    res.status(201).json({
+      user: {
+        id: newUser._id.toString(),
+        name: newUser.name,
+        email: newUser.email,
+        profileImageUrl: newUser.profileImageUrl,
+      },
+    });
   } catch (err: unknown) {
     if (
       typeof err === 'object' && err !== null &&
-      'code' in err && (err as { code: string }).code === '23505'
+      'code' in err && (err as { code: number }).code === 11000
     ) {
       res.status(409).json({ error: 'Email is already registered' });
       return;
@@ -128,11 +120,7 @@ authRouter.post('/login', async (req: Request, res: Response) => {
       return;
     }
 
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, email))
-      .limit(1);
+    const user = await User.findOne({ email });
 
     if (!user || !user.passwordHash) {
       res.status(401).json({ error: 'Invalid email or password' });
@@ -147,16 +135,16 @@ authRouter.post('/login', async (req: Request, res: Response) => {
     }
 
     const accessToken = signToken({
-      id: user.id,
+      id: user._id.toString(),
       email: user.email,
       name: user.name,
       profileImageUrl: user.profileImageUrl ?? null,
     });
-    const refreshToken = await createRefreshToken(user.id);
+    const refreshToken = await createRefreshToken(user._id.toString());
     setAuthCookies(res, accessToken, refreshToken);
     res.json({
       user: {
-        id: user.id,
+        id: user._id.toString(),
         name: user.name,
         email: user.email,
         profileImageUrl: user.profileImageUrl,
@@ -223,15 +211,16 @@ authRouter.get(
   }),
   async (req: Request, res: Response) => {
     try {
-      const user = req.user! as { id: number; email: string; name: string; profileImageUrl: string | null | undefined };
+      const user = req.user! as { id: string; _id: { toString(): string }; email: string; name: string; profileImageUrl: string | null | undefined };
+      const userId = user.id ?? user._id.toString();
 
       const accessToken = signToken({
-        id: user.id,
+        id: userId,
         email: user.email,
         name: user.name,
         profileImageUrl: user.profileImageUrl ?? null,
       });
-      const refreshToken = await createRefreshToken(user.id);
+      const refreshToken = await createRefreshToken(userId);
 
       res.cookie(ACCESS_COOKIE_NAME, accessToken, getAccessCookieOptions());
       res.cookie(REFRESH_COOKIE_NAME, refreshToken, getRefreshCookieOptions());
@@ -272,11 +261,7 @@ authRouter.put('/profile', requireAuth, async (req: Request, res: Response) => {
         return;
       }
 
-      const [currentUser] = await db
-        .select({ profileImageUrl: users.profileImageUrl })
-        .from(users)
-        .where(eq(users.id, req.user!.id))
-        .limit(1);
+      const currentUser = await User.findById(req.user!.id).select('profileImageUrl');
 
       if (!currentUser) {
         res.status(404).json({ error: 'User not found' });
@@ -294,28 +279,32 @@ authRouter.put('/profile', requireAuth, async (req: Request, res: Response) => {
         }
       }
 
-      const [updatedUser] = await db
-        .update(users)
-        .set({
-          name,
-          profileImageUrl: nextProfileImageUrl,
-        })
-        .where(eq(users.id, req.user!.id))
-        .returning({
-          id: users.id,
-          name: users.name,
-          email: users.email,
-          profileImageUrl: users.profileImageUrl,
-        });
+      const updatedUser = await User.findByIdAndUpdate(
+        req.user!.id,
+        { name, profileImageUrl: nextProfileImageUrl },
+        { new: true, projection: { name: 1, email: 1, profileImageUrl: 1 } },
+      );
+
+      if (!updatedUser) {
+        res.status(404).json({ error: 'User not found' });
+        return;
+      }
 
       const accessToken = signToken({
-        id: updatedUser.id,
+        id: updatedUser._id.toString(),
         email: updatedUser.email,
         name: updatedUser.name,
         profileImageUrl: updatedUser.profileImageUrl ?? null,
       });
       res.cookie(ACCESS_COOKIE_NAME, accessToken, getAccessCookieOptions());
-      res.json({ user: updatedUser });
+      res.json({
+        user: {
+          id: updatedUser._id.toString(),
+          name: updatedUser.name,
+          email: updatedUser.email,
+          profileImageUrl: updatedUser.profileImageUrl,
+        },
+      });
     } catch {
       res.status(500).json({ error: 'Server error, please try again later' });
     }

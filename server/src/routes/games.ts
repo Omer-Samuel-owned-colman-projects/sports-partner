@@ -1,65 +1,151 @@
 import { Router, type Request, type Response } from 'express';
-import { and, count, desc, eq, gt, sql } from 'drizzle-orm';
-import { db } from '../db/client.js';
-
-import { gameComments, gameLikes, games, sports, venues, participants } from '../db/schema.js';
+import mongoose from 'mongoose';
+import { Game, GameComment, GameLike, Participant, Sport, Venue } from '../db/schema.js';
 import { parsePositiveIntQueryParam } from '../lib/query.js';
 import { optionalAuth, requireAuth } from '../middleware/auth.js';
-import type { GamesResponse, GameCommentsResponse, GameDetailResponse, GameMutationResponse } from '../types/games.js';
+import type {
+  GamesResponse,
+  GameCommentsResponse,
+  GameDetailResponse,
+  GameMutationResponse,
+} from '../types/games.js';
 import { gameMutationBodySchema, formatZodError } from '../validation/gameBody.js';
-import {
-  hydrateGameWeatherForRows,
-  shapeGameDetailRow,
-  shapeGameRow,
-} from '../lib/gameWeather.js';
+import { hydrateGameWeatherForRows, shapeGameDetailRow, shapeGameRow } from '../lib/gameWeather.js';
 
 export const gamesRouter = Router();
 
-const participantCount = sql<number>`(
-  SELECT count(*)::int FROM participants WHERE participants.game_id = games.id
-)`.as('participant_count');
-const likeCount = sql<number>`(
-  SELECT count(*)::int FROM game_likes WHERE game_likes.game_id = games.id
-)`.as('like_count');
-const commentCount = sql<number>`(
-  SELECT count(*)::int FROM game_comments WHERE game_comments.game_id = games.id
-)`.as('comment_count');
-
-const gameSelect = {
-  id: games.id,
-  scheduledAt: games.scheduledAt,
-  maxPlayers: games.maxPlayers,
-  description: games.description,
-  isOpen: games.isOpen,
-  createdAt: games.createdAt,
-  sport: { id: sports.id, name: sports.name },
-  venue: { id: venues.id, name: venues.name, city: venues.city },
-  creator: { id: games.creatorId },
-  participantCount,
-  likeCount,
-  commentCount,
-  weatherTempC: games.weatherTempC,
-  weatherRainMm: games.weatherRainMm,
-  weatherFetchedAt: games.weatherFetchedAt,
-  weatherFinal: games.weatherFinal,
-} as const;
-
-function currentUserLiked(userId: number | undefined) {
-  if (!userId) return sql<boolean>`false`.as('current_user_liked');
-  return sql<boolean>`EXISTS (
-    SELECT 1 FROM game_likes
-    WHERE game_likes.game_id = games.id
-    AND game_likes.user_id = ${userId}
-  )`.as('current_user_liked');
+function toObjectId(val: string) {
+  return new mongoose.Types.ObjectId(val);
 }
 
-function currentUserJoined(userId: number | undefined) {
-  if (!userId) return sql<boolean>`false`.as('current_user_joined');
-  return sql<boolean>`EXISTS (
-    SELECT 1 FROM participants
-    WHERE participants.game_id = games.id
-    AND participants.user_id = ${userId}
-  )`.as('current_user_joined');
+type AggregatedGameRow = {
+  id: string;
+  scheduledAt: Date;
+  maxPlayers: number;
+  description: string | null;
+  isOpen: boolean;
+  createdAt: Date;
+  sport: { id: string; name: string };
+  venue: { id: string; name: string; city: string };
+  creator: { id: string };
+  participantCount: number;
+  likeCount: number;
+  commentCount: number;
+  currentUserLiked: boolean;
+  currentUserJoined: boolean;
+  weatherTempC: number | null;
+  weatherRainMm: number | null;
+  weatherFetchedAt: Date | null;
+  weatherFinal: boolean;
+};
+
+async function aggregateGames(
+  matchFilter: Record<string, unknown>,
+  userId: string | undefined,
+  options?: { skip?: number; limit?: number },
+): Promise<AggregatedGameRow[]> {
+  const userOid = userId ? toObjectId(userId) : null;
+
+  const pipeline: mongoose.PipelineStage[] = [
+    { $match: matchFilter },
+    {
+      $lookup: {
+        from: 'sports',
+        localField: 'sportId',
+        foreignField: '_id',
+        as: '_sport',
+      },
+    },
+    { $unwind: '$_sport' },
+    {
+      $lookup: {
+        from: 'venues',
+        localField: 'venueId',
+        foreignField: '_id',
+        as: '_venue',
+      },
+    },
+    { $unwind: '$_venue' },
+    {
+      $lookup: {
+        from: 'participants',
+        localField: '_id',
+        foreignField: 'gameId',
+        as: '_participants',
+      },
+    },
+    {
+      $lookup: {
+        from: 'gamelikes',
+        localField: '_id',
+        foreignField: 'gameId',
+        as: '_likes',
+      },
+    },
+    {
+      $lookup: {
+        from: 'gamecomments',
+        localField: '_id',
+        foreignField: 'gameId',
+        as: '_comments',
+      },
+    },
+    { $sort: { scheduledAt: 1 as const } },
+    ...(options?.skip ? [{ $skip: options.skip }] : []),
+    ...(options?.limit ? [{ $limit: options.limit }] : []),
+    {
+      $project: {
+        _id: 0,
+        id: { $toString: '$_id' },
+        scheduledAt: 1,
+        maxPlayers: 1,
+        description: 1,
+        isOpen: 1,
+        createdAt: 1,
+        sport: { id: { $toString: '$_sport._id' }, name: '$_sport.name' },
+        venue: {
+          id: { $toString: '$_venue._id' },
+          name: '$_venue.name',
+          city: '$_venue.city',
+        },
+        creator: { id: { $toString: '$creatorId' } },
+        participantCount: { $size: '$_participants' },
+        likeCount: { $size: '$_likes' },
+        commentCount: { $size: '$_comments' },
+        currentUserLiked: userOid
+          ? { $in: [userOid, '$_likes.userId'] }
+          : { $literal: false },
+        currentUserJoined: userOid
+          ? { $in: [userOid, '$_participants.userId'] }
+          : { $literal: false },
+        weatherTempC: 1,
+        weatherRainMm: 1,
+        weatherFetchedAt: 1,
+        weatherFinal: 1,
+      },
+    },
+  ];
+
+  return Game.aggregate<AggregatedGameRow>(pipeline);
+}
+
+async function fetchGameDetail(gameId: string, userId: string | undefined): Promise<GameDetailResponse | null> {
+  const rows = await aggregateGames({ _id: toObjectId(gameId) }, userId);
+  const row = rows[0];
+  if (!row) return null;
+
+  await hydrateGameWeatherForRows([row]);
+
+  const gameParticipants = await Participant.find({ gameId: toObjectId(gameId) })
+    .select('userId joinedAt')
+    .lean();
+
+  const participants = gameParticipants.map((p) => ({
+    userId: p.userId.toString(),
+    joinedAt: p.joinedAt,
+  }));
+
+  return { game: shapeGameDetailRow(row, participants) };
 }
 
 // GET /api/games
@@ -67,59 +153,59 @@ gamesRouter.get('/', optionalAuth, async (req: Request, res: Response) => {
   try {
     const { sport, venue, user, page, limit } = req.query;
 
-    let sportId: number | null = null;
-    let venueId: number | null = null;
-    let userId: number | null = null;
+    let sportId: string | null = null;
+    let venueId: string | null = null;
+    let userId: string | null = null;
     let pageNum: number | null = null;
     let limitNum: number | null = null;
 
     try {
-      sportId = parsePositiveIntQueryParam(sport);
-      venueId = parsePositiveIntQueryParam(venue);
-      userId = parsePositiveIntQueryParam(user);
+      if (typeof sport === 'string' && sport) {
+        if (mongoose.Types.ObjectId.isValid(sport)) {
+          sportId = sport;
+        } else {
+          const s = await Sport.findOne({ name: { $regex: `^${sport}$`, $options: 'i' } });
+          sportId = s?._id.toString() ?? null;
+        }
+      }
+      if (typeof venue === 'string' && venue) {
+        if (mongoose.Types.ObjectId.isValid(venue)) {
+          venueId = venue;
+        } else {
+          const v = await Venue.findOne({ name: { $regex: `^${venue}$`, $options: 'i' } });
+          venueId = v?._id.toString() ?? null;
+        }
+      }
+      if (typeof user === 'string' && user) userId = user;
       pageNum = parsePositiveIntQueryParam(page);
       limitNum = parsePositiveIntQueryParam(limit);
     } catch (err) {
       res.status(400).json({ error: err instanceof Error ? err.message : 'Invalid query params' });
       return;
     }
+
     const shouldPaginate = pageNum !== null || limitNum !== null;
     const resolvedPage = pageNum ?? 1;
     const resolvedLimit = Math.min(limitNum ?? 10, 50);
 
-    const whereConditions = [];
+    const matchFilter: Record<string, unknown> = {};
     if (!userId) {
-      whereConditions.push(eq(games.isOpen, true));
-      whereConditions.push(gt(games.scheduledAt, new Date()));
+      matchFilter.isOpen = true;
+      matchFilter.scheduledAt = { $gt: new Date() };
     }
-    if (sportId) whereConditions.push(eq(games.sportId, sportId));
-    if (venueId) whereConditions.push(eq(games.venueId, venueId));
-    if (userId) whereConditions.push(eq(games.creatorId, userId));
-    const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+    if (sportId) matchFilter.sportId = toObjectId(sportId);
+    if (venueId) matchFilter.venueId = toObjectId(venueId);
+    if (userId) matchFilter.creatorId = toObjectId(userId);
 
     let total = 0;
     if (shouldPaginate) {
-      [{ value: total }] = await db
-        .select({ value: count() })
-        .from(games)
-        .where(whereClause);
+      total = await Game.countDocuments(matchFilter);
     }
 
-    const baseQuery = db
-      .select({
-        ...gameSelect,
-        currentUserLiked: currentUserLiked(req.user?.id),
-        currentUserJoined: currentUserJoined(req.user?.id),
-      })
-      .from(games)
-      .innerJoin(sports, eq(games.sportId, sports.id))
-      .innerJoin(venues, eq(games.venueId, venues.id))
-      .where(whereClause)
-      .orderBy(games.scheduledAt);
-
-    const rows = shouldPaginate
-      ? await baseQuery.limit(resolvedLimit).offset((resolvedPage - 1) * resolvedLimit)
-      : await baseQuery;
+    const rows = await aggregateGames(matchFilter, req.user?.id, {
+      skip: shouldPaginate ? (resolvedPage - 1) * resolvedLimit : undefined,
+      limit: shouldPaginate ? resolvedLimit : undefined,
+    });
 
     await hydrateGameWeatherForRows(rows);
     const shaped = rows.map(shapeGameRow);
@@ -155,13 +241,13 @@ gamesRouter.post('/', requireAuth, async (req: Request, res: Response) => {
 
   const { sport_id, venue_id, date_time, max_players, description } = parsed.data;
 
-  const [sport] = await db.select({ id: sports.id }).from(sports).where(eq(sports.id, sport_id)).limit(1);
+  const sport = await Sport.findById(sport_id);
   if (!sport) {
     res.status(400).json({ error: 'sport_id does not exist' });
     return;
   }
 
-  const [venue] = await db.select({ id: venues.id }).from(venues).where(eq(venues.id, venue_id)).limit(1);
+  const venue = await Venue.findById(venue_id);
   if (!venue) {
     res.status(400).json({ error: 'venue_id does not exist' });
     return;
@@ -170,24 +256,18 @@ gamesRouter.post('/', requireAuth, async (req: Request, res: Response) => {
   const userId = req.user!.id;
 
   try {
-    const newId = await db.transaction(async (tx) => {
-      const [inserted] = await tx
-        .insert(games)
-        .values({
-          creatorId: userId,
-          sportId: sport_id,
-          venueId: venue_id,
-          scheduledAt: new Date(date_time),
-          maxPlayers: max_players,
-          description: description || null,
-        })
-        .returning({ id: games.id });
-
-      await tx.insert(participants).values({ gameId: inserted.id, userId });
-      return inserted.id;
+    const game = await Game.create({
+      creatorId: toObjectId(userId),
+      sportId: toObjectId(sport_id),
+      venueId: toObjectId(venue_id),
+      scheduledAt: new Date(date_time),
+      maxPlayers: max_players,
+      description: description || null,
     });
 
-    res.status(201).json({ game: { id: newId } } satisfies GameMutationResponse);
+    await Participant.create({ gameId: game._id, userId: toObjectId(userId) });
+
+    res.status(201).json({ game: { id: game._id.toString() } } satisfies GameMutationResponse);
   } catch {
     res.status(500).json({ error: 'Server error, please try again later' });
   }
@@ -196,42 +276,19 @@ gamesRouter.post('/', requireAuth, async (req: Request, res: Response) => {
 // GET /api/games/:id
 gamesRouter.get('/:id', optionalAuth, async (req: Request, res: Response) => {
   try {
-    const gameId = Number(req.params.id);
-    if (Number.isNaN(gameId)) {
+    const gameId = req.params.id;
+    if (!mongoose.Types.ObjectId.isValid(gameId)) {
       res.status(400).json({ error: 'Invalid game ID' });
       return;
     }
 
-    const [row] = await db
-      .select({
-        ...gameSelect,
-        currentUserLiked: currentUserLiked(req.user?.id),
-        currentUserJoined: currentUserJoined(req.user?.id),
-      })
-      .from(games)
-      .innerJoin(sports, eq(games.sportId, sports.id))
-      .innerJoin(venues, eq(games.venueId, venues.id))
-      .where(eq(games.id, gameId))
-      .limit(1);
-
-    if (!row) {
+    const detail = await fetchGameDetail(gameId, req.user?.id);
+    if (!detail) {
       res.status(404).json({ error: 'Game not found' });
       return;
     }
 
-    await hydrateGameWeatherForRows([row]);
-
-    const gameParticipants = await db
-      .select({
-        userId: participants.userId,
-        joinedAt: participants.joinedAt,
-      })
-      .from(participants)
-      .where(eq(participants.gameId, gameId));
-
-    res.json({
-      game: shapeGameDetailRow(row, gameParticipants),
-    } satisfies GameDetailResponse);
+    res.json(detail satisfies GameDetailResponse);
   } catch {
     res.status(500).json({ error: 'Server error, please try again later' });
   }
@@ -240,77 +297,42 @@ gamesRouter.get('/:id', optionalAuth, async (req: Request, res: Response) => {
 // POST /api/games/:id/join
 gamesRouter.post('/:id/join', requireAuth, async (req: Request, res: Response) => {
   try {
-    const gameId = Number(req.params.id);
-    if (Number.isNaN(gameId)) {
+    const gameId = req.params.id;
+    if (!mongoose.Types.ObjectId.isValid(gameId)) {
       res.status(400).json({ error: 'Invalid game ID' });
       return;
     }
 
     const userId = req.user!.id;
 
-    const result = await db.transaction(async (tx) => {
-      const [game] = await tx
-        .select({ maxPlayers: games.maxPlayers, isOpen: games.isOpen })
-        .from(games)
-        .where(eq(games.id, gameId))
-        .limit(1);
-
-      if (!game) return { error: 'Game not found', status: 404 as const };
-      if (!game.isOpen) return { error: 'Game is full', status: 409 as const };
-
-      const [existing] = await tx
-        .select({ gameId: participants.gameId })
-        .from(participants)
-        .where(and(eq(participants.gameId, gameId), eq(participants.userId, userId)))
-        .limit(1);
-
-      if (existing) return { error: 'Already joined', status: 409 as const };
-
-      await tx.insert(participants).values({ gameId, userId });
-
-      const [{ value: participantCount }] = await tx
-        .select({ value: count() })
-        .from(participants)
-        .where(eq(participants.gameId, gameId));
-
-      if (participantCount >= game.maxPlayers) {
-        await tx.update(games).set({ isOpen: false }).where(eq(games.id, gameId));
-      }
-
-      return null;
-    });
-
-    if (result) {
-      res.status(result.status).json({ error: result.error });
+    const game = await Game.findById(gameId).select('maxPlayers isOpen');
+    if (!game) {
+      res.status(404).json({ error: 'Game not found' });
+      return;
+    }
+    if (!game.isOpen) {
+      res.status(409).json({ error: 'Game is full' });
       return;
     }
 
-    // Return refreshed game detail
-    const [row] = await db
-      .select({
-        ...gameSelect,
-        currentUserLiked: currentUserLiked(userId),
-        currentUserJoined: currentUserJoined(userId),
-      })
-      .from(games)
-      .innerJoin(sports, eq(games.sportId, sports.id))
-      .innerJoin(venues, eq(games.venueId, venues.id))
-      .where(eq(games.id, gameId))
-      .limit(1);
+    const existing = await Participant.findOne({
+      gameId: toObjectId(gameId),
+      userId: toObjectId(userId),
+    });
+    if (existing) {
+      res.status(409).json({ error: 'Already joined' });
+      return;
+    }
 
-    await hydrateGameWeatherForRows([row!]);
+    await Participant.create({ gameId: toObjectId(gameId), userId: toObjectId(userId) });
 
-    const gameParticipants = await db
-      .select({
-        userId: participants.userId,
-        joinedAt: participants.joinedAt,
-      })
-      .from(participants)
-      .where(eq(participants.gameId, gameId));
+    const participantCount = await Participant.countDocuments({ gameId: toObjectId(gameId) });
+    if (participantCount >= game.maxPlayers) {
+      await Game.updateOne({ _id: gameId }, { isOpen: false });
+    }
 
-    res.json({
-      game: shapeGameDetailRow(row!, gameParticipants),
-    } satisfies GameDetailResponse);
+    const detail = await fetchGameDetail(gameId, userId);
+    res.json(detail! satisfies GameDetailResponse);
   } catch {
     res.status(500).json({ error: 'Server error, please try again later' });
   }
@@ -319,77 +341,38 @@ gamesRouter.post('/:id/join', requireAuth, async (req: Request, res: Response) =
 // DELETE /api/games/:id/join
 gamesRouter.delete('/:id/join', requireAuth, async (req: Request, res: Response) => {
   try {
-    const gameId = Number(req.params.id);
-    if (Number.isNaN(gameId)) {
+    const gameId = req.params.id;
+    if (!mongoose.Types.ObjectId.isValid(gameId)) {
       res.status(400).json({ error: 'Invalid game ID' });
       return;
     }
 
     const userId = req.user!.id;
 
-    const result = await db.transaction(async (tx) => {
-      const [game] = await tx
-        .select({ id: games.id, maxPlayers: games.maxPlayers })
-        .from(games)
-        .where(eq(games.id, gameId))
-        .limit(1);
-
-      if (!game) return { error: 'Game not found', status: 404 as const };
-
-      const [existing] = await tx
-        .select({ gameId: participants.gameId })
-        .from(participants)
-        .where(and(eq(participants.gameId, gameId), eq(participants.userId, userId)))
-        .limit(1);
-
-      if (!existing) return { error: 'Not joined', status: 409 as const };
-
-      await tx
-        .delete(participants)
-        .where(and(eq(participants.gameId, gameId), eq(participants.userId, userId)));
-
-      const [{ value: participantCount }] = await tx
-        .select({ value: count() })
-        .from(participants)
-        .where(eq(participants.gameId, gameId));
-
-      if (participantCount < game.maxPlayers) {
-        await tx.update(games).set({ isOpen: true }).where(eq(games.id, gameId));
-      }
-
-      return null;
-    });
-
-    if (result) {
-      res.status(result.status).json({ error: result.error });
+    const game = await Game.findById(gameId).select('maxPlayers');
+    if (!game) {
+      res.status(404).json({ error: 'Game not found' });
       return;
     }
 
-    const [row] = await db
-      .select({
-        ...gameSelect,
-        currentUserLiked: currentUserLiked(userId),
-        currentUserJoined: currentUserJoined(userId),
-      })
-      .from(games)
-      .innerJoin(sports, eq(games.sportId, sports.id))
-      .innerJoin(venues, eq(games.venueId, venues.id))
-      .where(eq(games.id, gameId))
-      .limit(1);
+    const existing = await Participant.findOne({
+      gameId: toObjectId(gameId),
+      userId: toObjectId(userId),
+    });
+    if (!existing) {
+      res.status(409).json({ error: 'Not joined' });
+      return;
+    }
 
-    await hydrateGameWeatherForRows([row!]);
+    await Participant.deleteOne({ gameId: toObjectId(gameId), userId: toObjectId(userId) });
 
-    const gameParticipants = await db
-      .select({
-        userId: participants.userId,
-        joinedAt: participants.joinedAt,
-      })
-      .from(participants)
-      .where(eq(participants.gameId, gameId));
+    const participantCount = await Participant.countDocuments({ gameId: toObjectId(gameId) });
+    if (participantCount < game.maxPlayers) {
+      await Game.updateOne({ _id: gameId }, { isOpen: true });
+    }
 
-    res.json({
-      game: shapeGameDetailRow(row!, gameParticipants),
-    } satisfies GameDetailResponse);
+    const detail = await fetchGameDetail(gameId, userId);
+    res.json(detail! satisfies GameDetailResponse);
   } catch {
     res.status(500).json({ error: 'Server error, please try again later' });
   }
@@ -398,20 +381,24 @@ gamesRouter.delete('/:id/join', requireAuth, async (req: Request, res: Response)
 // POST /api/games/:id/like
 gamesRouter.post('/:id/like', requireAuth, async (req: Request, res: Response) => {
   try {
-    const gameId = Number(req.params.id);
-    if (Number.isNaN(gameId)) {
+    const gameId = req.params.id;
+    if (!mongoose.Types.ObjectId.isValid(gameId)) {
       res.status(400).json({ error: 'Invalid game ID' });
       return;
     }
 
     const userId = req.user!.id;
-    const [game] = await db.select({ id: games.id }).from(games).where(eq(games.id, gameId)).limit(1);
+    const game = await Game.findById(gameId);
     if (!game) {
       res.status(404).json({ error: 'Game not found' });
       return;
     }
 
-    await db.insert(gameLikes).values({ gameId, userId }).onConflictDoNothing();
+    await GameLike.updateOne(
+      { gameId: toObjectId(gameId), userId: toObjectId(userId) },
+      { $setOnInsert: { gameId: toObjectId(gameId), userId: toObjectId(userId) } },
+      { upsert: true },
+    );
     res.status(204).send();
   } catch {
     res.status(500).json({ error: 'Server error, please try again later' });
@@ -421,14 +408,14 @@ gamesRouter.post('/:id/like', requireAuth, async (req: Request, res: Response) =
 // DELETE /api/games/:id/like
 gamesRouter.delete('/:id/like', requireAuth, async (req: Request, res: Response) => {
   try {
-    const gameId = Number(req.params.id);
-    if (Number.isNaN(gameId)) {
+    const gameId = req.params.id;
+    if (!mongoose.Types.ObjectId.isValid(gameId)) {
       res.status(400).json({ error: 'Invalid game ID' });
       return;
     }
 
     const userId = req.user!.id;
-    await db.delete(gameLikes).where(and(eq(gameLikes.gameId, gameId), eq(gameLikes.userId, userId)));
+    await GameLike.deleteOne({ gameId: toObjectId(gameId), userId: toObjectId(userId) });
     res.status(204).send();
   } catch {
     res.status(500).json({ error: 'Server error, please try again later' });
@@ -438,30 +425,31 @@ gamesRouter.delete('/:id/like', requireAuth, async (req: Request, res: Response)
 // GET /api/games/:id/comments
 gamesRouter.get('/:id/comments', requireAuth, async (req: Request, res: Response) => {
   try {
-    const gameId = Number(req.params.id);
-    if (Number.isNaN(gameId)) {
+    const gameId = req.params.id;
+    if (!mongoose.Types.ObjectId.isValid(gameId)) {
       res.status(400).json({ error: 'Invalid game ID' });
       return;
     }
 
-    const [game] = await db.select({ id: games.id }).from(games).where(eq(games.id, gameId)).limit(1);
+    const game = await Game.findById(gameId);
     if (!game) {
       res.status(404).json({ error: 'Game not found' });
       return;
     }
 
-    const comments = await db
-      .select({
-        id: gameComments.id,
-        userId: gameComments.userId,
-        content: gameComments.content,
-        createdAt: gameComments.createdAt,
-      })
-      .from(gameComments)
-      .where(eq(gameComments.gameId, gameId))
-      .orderBy(desc(gameComments.createdAt));
+    const comments = await GameComment.find({ gameId: toObjectId(gameId) })
+      .sort({ createdAt: -1 })
+      .select('userId content createdAt')
+      .lean();
 
-    res.json({ comments } satisfies GameCommentsResponse);
+    res.json({
+      comments: comments.map((c) => ({
+        id: c._id.toString(),
+        userId: c.userId.toString(),
+        content: c.content,
+        createdAt: c.createdAt,
+      })),
+    } satisfies GameCommentsResponse);
   } catch {
     res.status(500).json({ error: 'Server error, please try again later' });
   }
@@ -470,8 +458,8 @@ gamesRouter.get('/:id/comments', requireAuth, async (req: Request, res: Response
 // POST /api/games/:id/comments
 gamesRouter.post('/:id/comments', requireAuth, async (req: Request, res: Response) => {
   try {
-    const gameId = Number(req.params.id);
-    if (Number.isNaN(gameId)) {
+    const gameId = req.params.id;
+    if (!mongoose.Types.ObjectId.isValid(gameId)) {
       res.status(400).json({ error: 'Invalid game ID' });
       return;
     }
@@ -486,31 +474,35 @@ gamesRouter.post('/:id/comments', requireAuth, async (req: Request, res: Respons
       return;
     }
 
-    const [game] = await db.select({ id: games.id }).from(games).where(eq(games.id, gameId)).limit(1);
+    const game = await Game.findById(gameId);
     if (!game) {
       res.status(404).json({ error: 'Game not found' });
       return;
     }
 
-    const [comment] = await db
-      .insert(gameComments)
-      .values({ gameId, userId: req.user!.id, content })
-      .returning({
-        id: gameComments.id,
-        userId: gameComments.userId,
-        content: gameComments.content,
-        createdAt: gameComments.createdAt,
-      });
+    const comment = await GameComment.create({
+      gameId: toObjectId(gameId),
+      userId: toObjectId(req.user!.id),
+      content,
+    });
 
-    res.status(201).json({ comment });
+    res.status(201).json({
+      comment: {
+        id: comment._id.toString(),
+        userId: comment.userId.toString(),
+        content: comment.content,
+        createdAt: comment.createdAt,
+      },
+    });
   } catch {
     res.status(500).json({ error: 'Server error, please try again later' });
   }
-})
+});
+
 // PUT /api/games/:id
 gamesRouter.put('/:id', requireAuth, async (req: Request, res: Response) => {
-  const gameId = Number(req.params.id);
-  if (Number.isNaN(gameId)) {
+  const gameId = req.params.id;
+  if (!mongoose.Types.ObjectId.isValid(gameId)) {
     res.status(400).json({ error: 'Invalid game ID' });
     return;
   }
@@ -523,34 +515,24 @@ gamesRouter.put('/:id', requireAuth, async (req: Request, res: Response) => {
 
   const { sport_id, venue_id, date_time, max_players, description } = parsed.data;
 
-  const [existing] = await db
-    .select({
-      id: games.id,
-      creatorId: games.creatorId,
-      scheduledAt: games.scheduledAt,
-      venueId: games.venueId,
-    })
-    .from(games)
-    .where(eq(games.id, gameId))
-    .limit(1);
-
+  const existing = await Game.findById(gameId).select('creatorId scheduledAt venueId');
   if (!existing) {
     res.status(404).json({ error: 'Game not found' });
     return;
   }
 
-  if (existing.creatorId !== req.user!.id) {
+  if (existing.creatorId.toString() !== req.user!.id) {
     res.status(403).json({ error: 'You can only edit games you created' });
     return;
   }
 
-  const [sport] = await db.select({ id: sports.id }).from(sports).where(eq(sports.id, sport_id)).limit(1);
+  const sport = await Sport.findById(sport_id);
   if (!sport) {
     res.status(400).json({ error: 'sport_id does not exist' });
     return;
   }
 
-  const [venue] = await db.select({ id: venues.id }).from(venues).where(eq(venues.id, venue_id)).limit(1);
+  const venue = await Venue.findById(venue_id);
   if (!venue) {
     res.status(400).json({ error: 'venue_id does not exist' });
     return;
@@ -559,14 +541,14 @@ gamesRouter.put('/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const nextScheduled = new Date(date_time);
     const scheduleChanged = existing.scheduledAt.getTime() !== nextScheduled.getTime();
-    const venueChanged = existing.venueId !== venue_id;
+    const venueChanged = existing.venueId.toString() !== venue_id;
     const resetWeather = scheduleChanged || venueChanged;
 
-    await db
-      .update(games)
-      .set({
-        sportId: sport_id,
-        venueId: venue_id,
+    await Game.updateOne(
+      { _id: gameId },
+      {
+        sportId: toObjectId(sport_id),
+        venueId: toObjectId(venue_id),
         scheduledAt: nextScheduled,
         maxPlayers: max_players,
         description: description || null,
@@ -578,8 +560,8 @@ gamesRouter.put('/:id', requireAuth, async (req: Request, res: Response) => {
               weatherFinal: false,
             }
           : {}),
-      })
-      .where(eq(games.id, gameId));
+      },
+    );
 
     res.json({ game: { id: gameId } } satisfies GameMutationResponse);
   } catch {

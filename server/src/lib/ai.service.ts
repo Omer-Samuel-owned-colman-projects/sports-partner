@@ -1,7 +1,5 @@
-import { and, gt, ilike, lte, gte, eq } from 'drizzle-orm';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { db } from '../db/client.js';
-import { games, sports, venues } from '../db/schema.js';
+import { Game, Sport, Venue } from '../db/schema.js';
 
 type ParsedSearch = {
   sportType: string | null;
@@ -12,7 +10,7 @@ type ParsedSearch = {
 };
 
 type GameSummary = {
-  id: number;
+  id: string;
   sport: string;
   venue: string;
   city: string;
@@ -107,7 +105,6 @@ const normalizeCity = (value: string | null): string | null => {
   if (!value) return null;
   const trimmed = value.trim().replace(/\s+/g, ' ');
   if (!trimmed) return null;
-  // handle common "tel aviv" formatting variations
   const lc = trimmed.toLowerCase();
   if (lc === 'tel-aviv' || lc === 'tel aviv-yafo' || lc === 'tel aviv yafo') return 'Tel Aviv';
   return trimmed;
@@ -169,51 +166,57 @@ const parseUserQuery = async (userQuery: string): Promise<ParsedSearch> => {
 };
 
 const queryGames = async (parsed: ParsedSearch): Promise<GameSummary[]> => {
-  const whereConditions = [
-    eq(games.isOpen, true),
-    gt(games.scheduledAt, new Date()),
-  ];
+  const filter: Record<string, unknown> = {
+    isOpen: true,
+    scheduledAt: { $gt: new Date() },
+  };
 
   if (parsed.sportType) {
-    whereConditions.push(ilike(sports.name, `%${parsed.sportType}%`));
-  }
-  if (parsed.city) {
-    whereConditions.push(ilike(venues.city, `%${parsed.city}%`));
-  }
-  if (parsed.dateFrom) {
-    const dateFrom = new Date(parsed.dateFrom);
-    if (!Number.isNaN(dateFrom.getTime())) {
-      whereConditions.push(gte(games.scheduledAt, dateFrom));
-    }
-  }
-  if (parsed.dateTo) {
-    const dateTo = new Date(parsed.dateTo);
-    if (!Number.isNaN(dateTo.getTime())) {
-      whereConditions.push(lte(games.scheduledAt, dateTo));
+    const sport = await Sport.findOne({ name: { $regex: parsed.sportType, $options: 'i' } });
+    if (sport) {
+      filter.sportId = sport._id;
+    } else {
+      return [];
     }
   }
 
-  const rows = await db
-    .select({
-      id: games.id,
-      sport: sports.name,
-      venue: venues.name,
-      city: venues.city,
-      scheduledAt: games.scheduledAt,
-      maxPlayers: games.maxPlayers,
-      isOpen: games.isOpen,
-      description: games.description,
-    })
-    .from(games)
-    .innerJoin(sports, eq(games.sportId, sports.id))
-    .innerJoin(venues, eq(games.venueId, venues.id))
-    .where(and(...whereConditions))
-    .orderBy(games.scheduledAt)
-    .limit(20);
+  if (parsed.city) {
+    const venueIds = await Venue.find({ city: { $regex: parsed.city, $options: 'i' } }).distinct('_id');
+    if (venueIds.length === 0) return [];
+    filter.venueId = { $in: venueIds };
+  }
+
+  if (parsed.dateFrom || parsed.dateTo) {
+    const scheduledFilter: Record<string, Date> = {};
+    if (parsed.dateFrom) {
+      const d = new Date(parsed.dateFrom);
+      if (!Number.isNaN(d.getTime())) scheduledFilter.$gte = d;
+    }
+    if (parsed.dateTo) {
+      const d = new Date(parsed.dateTo);
+      if (!Number.isNaN(d.getTime())) scheduledFilter.$lte = d;
+    }
+    if (Object.keys(scheduledFilter).length > 0) {
+      filter.scheduledAt = { ...filter.scheduledAt as Record<string, unknown>, ...scheduledFilter };
+    }
+  }
+
+  const rows = await Game.find(filter)
+    .sort({ scheduledAt: 1 })
+    .limit(20)
+    .populate<{ sportId: { name: string } }>('sportId', 'name')
+    .populate<{ venueId: { name: string; city: string } }>('venueId', 'name city')
+    .lean();
 
   return rows.map((row) => ({
-    ...row,
+    id: row._id.toString(),
+    sport: (row.sportId as unknown as { name: string }).name,
+    venue: (row.venueId as unknown as { name: string; city: string }).name,
+    city: (row.venueId as unknown as { name: string; city: string }).city,
     scheduledAt: row.scheduledAt.toISOString(),
+    maxPlayers: row.maxPlayers,
+    isOpen: row.isOpen,
+    description: row.description,
   }));
 };
 
@@ -223,13 +226,22 @@ const buildNaturalLanguageResponse = async (params: {
   games: GameSummary[];
 }): Promise<string> => {
   const language = normalizeLanguage(params.parsed.detectedLanguage);
+  const count = params.games.length;
   const systemPrompt = [
     "You are the 'Sports-Partner' assistant.",
-    `Based on these search results: ${JSON.stringify(params.games)}, respond to the user's original query: '${params.userQuery}'.`,
     'CRITICAL: Always respond in English.',
     `Detected language from parser: ${language}.`,
-    'Be informative, friendly, and summarize games (Sport, Location, Time).',
-    'If no games are found, explain that in the same language and encourage them to create the first game.',
+    '',
+    `The database query returned exactly ${count} game(s).`,
+    count > 0
+      ? `Here are the results:\n${JSON.stringify(params.games, null, 2)}`
+      : 'No games matched the search.',
+    '',
+    `The user's original query was: '${params.userQuery}'.`,
+    '',
+    count > 0
+      ? 'Summarize EACH game found (Sport, Location, Date/Time). Do NOT say no games were found — the results above are real.'
+      : 'Tell the user no matching games were found and encourage them to create the first game.',
   ].join('\n');
 
   return generateTextWithModelFallback(systemPrompt);
@@ -251,4 +263,3 @@ export const runGameSearchAssistant = async (userQuery: string) => {
     answer,
   };
 };
-
