@@ -6,12 +6,6 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "predev": "npm run db:migrate",
-    "prestart": "npm run db:migrate",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio",
     "db:seed": "tsx src/db/seed.ts"
   },
   "dependencies": {
@@ -19,13 +13,12 @@
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
-    "drizzle-orm": "^0.45.1",
     "express": "^4.21.0",
     "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.5.0",
     "multer": "^2.1.1",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
-    "pg": "^8.20.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -38,9 +31,7 @@
     "@types/node": "^22.19.15",
     "@types/passport": "^1.0.17",
     "@types/passport-google-oauth20": "^2.0.17",
-    "@types/pg": "^8.18.0",
     "dotenv": "^17.3.1",
-    "drizzle-kit": "^0.31.9",
     "tsx": "^4.19.0",
     "typescript": "^5.5.4"
   }

@@ -11,7 +11,8 @@
     "start": "npm run start --prefix server",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
-    "db:reset": "docker compose down -v && docker compose up -d"
+    "db:reset": "docker compose down -v && docker compose up -d",
+    "db:seed": "npm run db:seed --prefix server"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

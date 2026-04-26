@@ -1,161 +1,171 @@
-import {
-  pgTable,
-  serial,
-  text,
-  varchar,
-  integer,
-  boolean,
-  timestamp,
-  primaryKey,
-  real,
-  uniqueIndex,
-} from 'drizzle-orm/pg-core';
-import { relations, sql } from 'drizzle-orm';
+import mongoose, { Schema, type Document, type Types } from 'mongoose';
 
-export const users = pgTable(
-  'users',
+/* ------------------------------------------------------------------ */
+/*  Interfaces                                                        */
+/* ------------------------------------------------------------------ */
+
+export interface IUser extends Document {
+  _id: Types.ObjectId;
+  name: string;
+  email: string;
+  profileImageUrl: string | null;
+  passwordHash: string | null;
+  provider: string;
+  providerId: string | null;
+  createdAt: Date;
+}
+
+export interface IRefreshToken extends Document {
+  _id: Types.ObjectId;
+  userId: Types.ObjectId;
+  token: string;
+  expiresAt: Date;
+  createdAt: Date;
+}
+
+export interface ISport extends Document {
+  _id: Types.ObjectId;
+  name: string;
+}
+
+export interface IVenue extends Document {
+  _id: Types.ObjectId;
+  name: string;
+  city: string;
+}
+
+export interface IGame extends Document {
+  _id: Types.ObjectId;
+  creatorId: Types.ObjectId;
+  sportId: Types.ObjectId;
+  venueId: Types.ObjectId;
+  scheduledAt: Date;
+  maxPlayers: number;
+  description: string | null;
+  isOpen: boolean;
+  createdAt: Date;
+  weatherTempC: number | null;
+  weatherRainMm: number | null;
+  weatherFetchedAt: Date | null;
+  weatherFinal: boolean;
+}
+
+export interface IParticipant extends Document {
+  _id: Types.ObjectId;
+  gameId: Types.ObjectId;
+  userId: Types.ObjectId;
+  joinedAt: Date;
+}
+
+export interface IGameLike extends Document {
+  _id: Types.ObjectId;
+  gameId: Types.ObjectId;
+  userId: Types.ObjectId;
+  createdAt: Date;
+}
+
+export interface IGameComment extends Document {
+  _id: Types.ObjectId;
+  gameId: Types.ObjectId;
+  userId: Types.ObjectId;
+  content: string;
+  createdAt: Date;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Schemas                                                           */
+/* ------------------------------------------------------------------ */
+
+const userSchema = new Schema<IUser>(
   {
-    id: serial('id').primaryKey(),
-    name: varchar('name', { length: 100 }).notNull(),
-    email: varchar('email', { length: 255 }).notNull().unique(),
-    profileImageUrl: varchar('profile_image_url', { length: 512 }),
-    passwordHash: varchar('password_hash', { length: 255 }),
-    provider: varchar('provider', { length: 50 }).default('local').notNull(),
-    providerId: varchar('provider_id', { length: 255 }),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
+    name: { type: String, required: true, maxlength: 100 },
+    email: { type: String, required: true, unique: true, maxlength: 255 },
+    profileImageUrl: { type: String, default: null },
+    passwordHash: { type: String, default: null },
+    provider: { type: String, default: 'local', required: true, maxlength: 50 },
+    providerId: { type: String, default: null },
   },
-  (table) => [
-    uniqueIndex('provider_provider_id_idx')
-      .on(table.provider, table.providerId)
-      .where(sql`${table.provider} != 'local'`),
-  ],
+  { timestamps: { createdAt: 'createdAt', updatedAt: false } },
 );
 
-export const refreshTokens = pgTable('refresh_tokens', {
-  id: serial('id').primaryKey(),
-  userId: integer('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  token: varchar('token', { length: 255 }).notNull().unique(),
-  expiresAt: timestamp('expires_at').notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
+userSchema.index({ provider: 1, providerId: 1 }, {
+  unique: true,
+  partialFilterExpression: { provider: { $ne: 'local' } },
 });
 
-export const sports = pgTable('sports', {
-  id: serial('id').primaryKey(),
-  name: varchar('name', { length: 100 }).notNull().unique(),
-});
-
-export const venues = pgTable('venues', {
-  id: serial('id').primaryKey(),
-  name: varchar('name', { length: 255 }).notNull(),
-  city: varchar('city', { length: 100 }).notNull(),
-});
-
-export const games = pgTable('games', {
-  id: serial('id').primaryKey(),
-  creatorId: integer('creator_id')
-    .notNull()
-    .references(() => users.id),
-  sportId: integer('sport_id')
-    .notNull()
-    .references(() => sports.id),
-  venueId: integer('venue_id')
-    .notNull()
-    .references(() => venues.id),
-  scheduledAt: timestamp('scheduled_at').notNull(),
-  maxPlayers: integer('max_players').notNull(),
-  description: text('description'),
-  isOpen: boolean('is_open').default(true).notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  weatherTempC: integer('weather_temp_c'),
-  weatherRainMm: real('weather_rain_mm'),
-  weatherFetchedAt: timestamp('weather_fetched_at'),
-  weatherFinal: boolean('weather_final').default(false).notNull(),
-});
-
-export const participants = pgTable(
-  'participants',
+const refreshTokenSchema = new Schema<IRefreshToken>(
   {
-    gameId: integer('game_id')
-      .notNull()
-      .references(() => games.id),
-    userId: integer('user_id')
-      .notNull()
-      .references(() => users.id),
-    joinedAt: timestamp('joined_at').defaultNow().notNull(),
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    token: { type: String, required: true, unique: true },
+    expiresAt: { type: Date, required: true },
   },
-  (table) => [primaryKey({ columns: [table.gameId, table.userId] })],
+  { timestamps: { createdAt: 'createdAt', updatedAt: false } },
 );
 
-export const gameLikes = pgTable(
-  'game_likes',
-  {
-    gameId: integer('game_id')
-      .notNull()
-      .references(() => games.id),
-    userId: integer('user_id')
-      .notNull()
-      .references(() => users.id),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-  },
-  (table) => [primaryKey({ columns: [table.gameId, table.userId] })],
-);
-
-export const gameComments = pgTable('game_comments', {
-  id: serial('id').primaryKey(),
-  gameId: integer('game_id')
-    .notNull()
-    .references(() => games.id),
-  userId: integer('user_id')
-    .notNull()
-    .references(() => users.id),
-  content: text('content').notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
+const sportSchema = new Schema<ISport>({
+  name: { type: String, required: true, unique: true, maxlength: 100 },
 });
 
-// Relations
+const venueSchema = new Schema<IVenue>({
+  name: { type: String, required: true, maxlength: 255 },
+  city: { type: String, required: true, maxlength: 100 },
+});
 
-export const usersRelations = relations(users, ({ many }) => ({
-  games: many(games),
-  participations: many(participants),
-  gameLikes: many(gameLikes),
-  gameComments: many(gameComments),
-  refreshTokens: many(refreshTokens),
-}));
+const gameSchema = new Schema<IGame>(
+  {
+    creatorId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    sportId: { type: Schema.Types.ObjectId, ref: 'Sport', required: true },
+    venueId: { type: Schema.Types.ObjectId, ref: 'Venue', required: true },
+    scheduledAt: { type: Date, required: true },
+    maxPlayers: { type: Number, required: true },
+    description: { type: String, default: null },
+    isOpen: { type: Boolean, default: true },
+    weatherTempC: { type: Number, default: null },
+    weatherRainMm: { type: Number, default: null },
+    weatherFetchedAt: { type: Date, default: null },
+    weatherFinal: { type: Boolean, default: false },
+  },
+  { timestamps: { createdAt: 'createdAt', updatedAt: false } },
+);
 
-export const refreshTokensRelations = relations(refreshTokens, ({ one }) => ({
-  user: one(users, { fields: [refreshTokens.userId], references: [users.id] }),
-}));
+const participantSchema = new Schema<IParticipant>(
+  {
+    gameId: { type: Schema.Types.ObjectId, ref: 'Game', required: true },
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  },
+  { timestamps: { createdAt: 'joinedAt', updatedAt: false } },
+);
 
-export const sportsRelations = relations(sports, ({ many }) => ({
-  games: many(games),
-}));
+participantSchema.index({ gameId: 1, userId: 1 }, { unique: true });
 
-export const venuesRelations = relations(venues, ({ many }) => ({
-  games: many(games),
-}));
+const gameLikeSchema = new Schema<IGameLike>(
+  {
+    gameId: { type: Schema.Types.ObjectId, ref: 'Game', required: true },
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  },
+  { timestamps: { createdAt: 'createdAt', updatedAt: false } },
+);
 
-export const gamesRelations = relations(games, ({ one, many }) => ({
-  creator: one(users, { fields: [games.creatorId], references: [users.id] }),
-  sport: one(sports, { fields: [games.sportId], references: [sports.id] }),
-  venue: one(venues, { fields: [games.venueId], references: [venues.id] }),
-  participants: many(participants),
-  likes: many(gameLikes),
-  comments: many(gameComments),
-}));
+gameLikeSchema.index({ gameId: 1, userId: 1 }, { unique: true });
 
-export const participantsRelations = relations(participants, ({ one }) => ({
-  game: one(games, { fields: [participants.gameId], references: [games.id] }),
-  user: one(users, { fields: [participants.userId], references: [users.id] }),
-}));
+const gameCommentSchema = new Schema<IGameComment>(
+  {
+    gameId: { type: Schema.Types.ObjectId, ref: 'Game', required: true },
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    content: { type: String, required: true },
+  },
+  { timestamps: { createdAt: 'createdAt', updatedAt: false } },
+);
 
-export const gameLikesRelations = relations(gameLikes, ({ one }) => ({
-  game: one(games, { fields: [gameLikes.gameId], references: [games.id] }),
-  user: one(users, { fields: [gameLikes.userId], references: [users.id] }),
-}));
+/* ------------------------------------------------------------------ */
+/*  Models                                                            */
+/* ------------------------------------------------------------------ */
 
-export const gameCommentsRelations = relations(gameComments, ({ one }) => ({
-  game: one(games, { fields: [gameComments.gameId], references: [games.id] }),
-  user: one(users, { fields: [gameComments.userId], references: [users.id] }),
-}));
+export const User = mongoose.model<IUser>('User', userSchema);
+export const RefreshToken = mongoose.model<IRefreshToken>('RefreshToken', refreshTokenSchema);
+export const Sport = mongoose.model<ISport>('Sport', sportSchema);
+export const Venue = mongoose.model<IVenue>('Venue', venueSchema);
+export const Game = mongoose.model<IGame>('Game', gameSchema);
+export const Participant = mongoose.model<IParticipant>('Participant', participantSchema);
+export const GameLike = mongoose.model<IGameLike>('GameLike', gameLikeSchema);
+export const GameComment = mongoose.model<IGameComment>('GameComment', gameCommentSchema);

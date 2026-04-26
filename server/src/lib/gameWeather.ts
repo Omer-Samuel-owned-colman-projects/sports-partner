@@ -1,8 +1,6 @@
-import { eq } from 'drizzle-orm';
-import { db } from '../db/client.js';
-import { games } from '../db/schema.js';
+import { Game } from '../db/schema.js';
 import { fetchVenueDayWeather } from './openMeteo.js';
-import type { Game, GameDetail } from '../types/games.js';
+import type { Game as GameType, GameDetail } from '../types/games.js';
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -12,9 +10,9 @@ const TWO_DAYS_MS = 2 * DAY_MS;
 const WEATHER_STALE_MS = 12 * HOUR_MS;
 
 export type GameRowWeatherFields = {
-  id: number;
+  id: string;
   scheduledAt: Date;
-  venue: { id: number; name: string; city: string };
+  venue: { id: string; name: string; city: string };
   weatherTempC: number | null;
   weatherRainMm: number | null;
   weatherFetchedAt: Date | null;
@@ -54,15 +52,15 @@ export async function refreshGameWeatherIfNeeded(row: GameRowWeatherFields): Pro
   if (!w) return;
 
   const fetchedAt = new Date();
-  await db
-    .update(games)
-    .set({
+  await Game.updateOne(
+    { _id: row.id },
+    {
       weatherTempC: w.tempC,
       weatherRainMm: w.rainMm,
       weatherFetchedAt: fetchedAt,
       weatherFinal: markFinal,
-    })
-    .where(eq(games.id, row.id));
+    },
+  );
 
   row.weatherTempC = w.tempC;
   row.weatherRainMm = w.rainMm;
@@ -74,7 +72,7 @@ export async function hydrateGameWeatherForRows(rows: GameRowWeatherFields[]): P
   await Promise.all(rows.map((r) => refreshGameWeatherIfNeeded(r)));
 }
 
-export function shapeGameRow(row: GameRowWeatherFields & Omit<Game, 'weather'>): Game {
+export function shapeGameRow(row: GameRowWeatherFields & Omit<GameType, 'weather'>): GameType {
   const weather =
     row.weatherFetchedAt != null && row.weatherTempC != null
       ? { tempC: row.weatherTempC, rainMm: row.weatherRainMm ?? 0 }
@@ -92,7 +90,7 @@ export function shapeGameRow(row: GameRowWeatherFields & Omit<Game, 'weather'>):
 }
 
 export function shapeGameDetailRow(
-  row: GameRowWeatherFields & Omit<Game, 'weather'>,
+  row: GameRowWeatherFields & Omit<GameType, 'weather'>,
   participants: GameDetail['participants'],
 ): GameDetail {
   return { ...shapeGameRow(row), participants };

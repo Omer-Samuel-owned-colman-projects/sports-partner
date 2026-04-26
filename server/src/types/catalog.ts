@@ -1,7 +1,7 @@
 export interface SportsResponse {
-  sports: { id: number; name: string }[];
+  sports: { id: string; name: string }[];
 }
 
 export interface VenuesResponse {
-  venues: { id: number; name: string; city: string }[];
+  venues: { id: string; name: string; city: string }[];
 }

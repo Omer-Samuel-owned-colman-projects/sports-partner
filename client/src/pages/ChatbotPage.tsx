@@ -16,7 +16,7 @@ import { api, ApiRequestError } from '../lib/api';
 type SupportedLanguage = 'hebrew' | 'english' | 'russian';
 
 type AiGameSummary = {
-  id: number;
+  id: string;
   sport: string;
   venue: string;
   city: string;

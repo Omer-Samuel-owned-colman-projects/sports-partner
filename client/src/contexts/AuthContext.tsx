@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 import { api } from '../lib/api';
 
 interface User {
-  id: number;
+  id: string;
   name: string;
   email: string;
   profileImageUrl: string | null;

@@ -1,8 +1,6 @@
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
-import { eq, and } from 'drizzle-orm';
-import { db } from '../db/client.js';
-import { users } from '../db/schema.js';
+import { User } from '../db/schema.js';
 
 function getGoogleCredentials() {
   const clientID = process.env.GOOGLE_CLIENT_ID;
@@ -40,38 +38,22 @@ export function configurePassport() {
             return done(new Error('Google account has no email'));
           }
 
-          // Check if a user with this Google provider ID already exists
-          const [existingOAuth] = await db
-            .select()
-            .from(users)
-            .where(and(eq(users.provider, 'google'), eq(users.providerId, googleId)))
-            .limit(1);
-
+          const existingOAuth = await User.findOne({ provider: 'google', providerId: googleId });
           if (existingOAuth) {
             return done(null, existingOAuth);
           }
 
-          // Check if a user with this email already exists (local account)
-          const [existingEmail] = await db
-            .select()
-            .from(users)
-            .where(eq(users.email, email))
-            .limit(1);
-
+          const existingEmail = await User.findOne({ email });
           if (existingEmail) {
             return done(new Error('An account with this email already exists. Please log in with your password.'));
           }
 
-          // Create a new user
-          const [newUser] = await db
-            .insert(users)
-            .values({
-              name,
-              email,
-              provider: 'google',
-              providerId: googleId,
-            })
-            .returning();
+          const newUser = await User.create({
+            name,
+            email,
+            provider: 'google',
+            providerId: googleId,
+          });
 
           return done(null, newUser);
         } catch (err) {

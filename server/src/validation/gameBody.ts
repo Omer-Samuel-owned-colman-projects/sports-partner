@@ -2,8 +2,8 @@ import { z } from 'zod';
 
 export const gameMutationBodySchema = z
   .object({
-    sport_id: z.coerce.number().int().positive(),
-    venue_id: z.coerce.number().int().positive(),
+    sport_id: z.string().min(1, 'sport_id is required'),
+    venue_id: z.string().min(1, 'venue_id is required'),
     date_time: z.string().min(1, 'date_time is required'),
     max_players: z.coerce.number().int().min(1).max(500),
     description: z.union([z.string(), z.null()]).optional(),
