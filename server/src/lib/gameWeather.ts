@@ -40,32 +40,36 @@ export async function refreshGameWeatherIfNeeded(row: GameRowWeatherFields): Pro
   const nowMs = Date.now();
   if (!shouldCallOpenMeteo(row, nowMs)) return;
 
-  const scheduled = row.scheduledAt.getTime();
-  const untilMs = scheduled - nowMs;
-  const markFinal = untilMs <= TWO_DAYS_MS;
+  try {
+    const scheduled = row.scheduledAt.getTime();
+    const untilMs = scheduled - nowMs;
+    const markFinal = untilMs <= TWO_DAYS_MS;
 
-  const w = await fetchVenueDayWeather({
-    venueName: row.venue.name,
-    city: row.venue.city,
-    scheduledAt: row.scheduledAt,
-  });
-  if (!w) return;
+    const w = await fetchVenueDayWeather({
+      venueName: row.venue.name,
+      city: row.venue.city,
+      scheduledAt: row.scheduledAt,
+    });
+    if (!w) return;
 
-  const fetchedAt = new Date();
-  await Game.updateOne(
-    { _id: row.id },
-    {
-      weatherTempC: w.tempC,
-      weatherRainMm: w.rainMm,
-      weatherFetchedAt: fetchedAt,
-      weatherFinal: markFinal,
-    },
-  );
+    const fetchedAt = new Date();
+    await Game.updateOne(
+      { _id: row.id },
+      {
+        weatherTempC: w.tempC,
+        weatherRainMm: w.rainMm,
+        weatherFetchedAt: fetchedAt,
+        weatherFinal: markFinal,
+      },
+    );
 
-  row.weatherTempC = w.tempC;
-  row.weatherRainMm = w.rainMm;
-  row.weatherFetchedAt = fetchedAt;
-  row.weatherFinal = markFinal;
+    row.weatherTempC = w.tempC;
+    row.weatherRainMm = w.rainMm;
+    row.weatherFetchedAt = fetchedAt;
+    row.weatherFinal = markFinal;
+  } catch {
+    // Weather fetch failed — serve the response without weather data
+  }
 }
 
 export async function hydrateGameWeatherForRows(rows: GameRowWeatherFields[]): Promise<void> {

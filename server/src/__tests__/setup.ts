@@ -1,7 +1,11 @@
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
-import { beforeAll, afterAll, afterEach } from 'vitest';
+import { beforeAll, afterAll, afterEach, vi } from 'vitest';
 import jwt from 'jsonwebtoken';
+
+vi.mock('../lib/openMeteo.js', () => ({
+  fetchVenueDayWeather: vi.fn().mockResolvedValue(null),
+}));
 
 process.env.JWT_SECRET = 'test-secret-key';
 
